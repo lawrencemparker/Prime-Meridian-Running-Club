@@ -30,10 +30,11 @@ export default function AnnouncementDetailPage() {
 
   const id = String(params?.id ?? "");
 
-  const announcement = useMemo(() => {
-    if (!mounted || !id) return null;
-    return typeof Store.getAnnouncement === "function" ? Store.getAnnouncement(id) : null;
-  }, [mounted, id]);
+ const announcement = useMemo(() => {
+  if (!mounted || !id) return null;
+  return Store.getAnnouncementById(id);
+}, [mounted, id]);
+
 
   const clubName = useMemo(() => {
     if (!mounted || !announcement) return null;
