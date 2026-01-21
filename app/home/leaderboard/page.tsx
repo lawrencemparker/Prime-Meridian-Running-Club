@@ -171,7 +171,8 @@ export default function LeaderboardPage() {
       const runs = (Store as any).listRuns() as any[];
       for (const r of runs) {
         const userId = String(r.user_id ?? "");
-        const runClubId = r.club_id ? String(r.club_id) : \"\";
+        const runClubId = r.club_id ? String(r.club_id) : "";
+
         const date = String(r.run_date ?? "");
         const miles = Number(r.miles ?? 0);
         const shoeId = r.shoe_id ? String(r.shoe_id) : "";

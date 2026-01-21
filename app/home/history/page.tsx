@@ -128,7 +128,7 @@ export default function HistoryPage() {
     return filtered.map((r) => ({
       id: String(r.id),
       user_id: String(r.user_id),
-      club_id: String((r as any).club_id ?? \"\"),
+      club_id: String((r as any).club_id ?? ""),
       run_date: String(r.run_date),
       miles: Number(r.miles ?? 0),
       run_type: String(r.run_type ?? "training"),
