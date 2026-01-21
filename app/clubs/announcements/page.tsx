@@ -156,7 +156,8 @@ export default function ClubAnnouncementsPage() {
         return;
       }
 
-      Store.updateAnnouncement(editingId, { title: t, body: b });
+      Store.updateAnnouncementById(editingId, { title: t, body: b });
+
       refresh();
       closeModal();
       showBanner("Changes saved");
