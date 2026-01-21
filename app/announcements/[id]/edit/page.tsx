@@ -21,7 +21,8 @@ export default function EditAnnouncementPage() {
 
   const rec = useMemo(() => {
     if (!mounted) return null;
-    return Store.getAnnouncement?.(params.id) ?? null;
+    return Store.getAnnouncementById(params.id) ?? null;
+
   }, [mounted, params.id]);
 
   const isAdmin = useMemo(() => {
