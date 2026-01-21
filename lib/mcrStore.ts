@@ -739,6 +739,32 @@ export const Store = {
     return found ?? null;
   },
 
+
+updateAnnouncementById(
+  id: string,
+  patch: Pick<Announcement, "title" | "body">
+): Announcement {
+  const all = readJSON<Announcement[]>(K_ANNOUNCEMENTS, []);
+
+  const idx = all.findIndex((a) => a.id === id);
+  if (idx === -1) {
+    throw new Error("Announcement not found");
+  }
+
+  const next: Announcement = {
+    ...all[idx],
+    ...patch,
+    updated_at: new Date().toISOString(),
+  };
+
+  const updated = [...all];
+  updated[idx] = next;
+
+  writeJSON(K_ANNOUNCEMENTS, updated);
+  return next;
+},
+
+
   createAnnouncement(input: any) {
     return (Store as any).addAnnouncement(input);
   },

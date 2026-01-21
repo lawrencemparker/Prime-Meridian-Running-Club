@@ -48,7 +48,8 @@ export default function EditAnnouncementPage() {
     setErr(null);
     try {
       setSaving(true);
-      Store.updateAnnouncement(params.id, { title, body });
+      Store.updateAnnouncementById(params.id, { title, body });
+
       router.replace(`/announcements/${params.id}`);
     } catch (e: any) {
       setErr(String(e?.message ?? "Unable to save."));
