@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Store } from "../../../lib/mcrStore";
-import { Card } from "../../../components/ui/Card";
-import { Button } from "../../../components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 
 export default function CreateClubPage() {
   const router = useRouter();
@@ -22,7 +22,7 @@ export default function CreateClubPage() {
   useEffect(() => {
     setMounted(true);
 
-    // ✅ Protect this route against direct access
+    // âœ… Protect this route against direct access
     if (!Store.isPremium()) {
       router.replace("/premium/create-club");
       return;
@@ -81,7 +81,7 @@ export default function CreateClubPage() {
         </div>
 
         <p className="mt-1 text-[13px] text-black/55 leading-relaxed">
-          Choose a name, set privacy, and invite runners when you’re ready.
+          Choose a name, set privacy, and invite runners when youâ€™re ready.
         </p>
 
         <div className="mt-5 space-y-4">

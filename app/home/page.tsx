@@ -1,16 +1,16 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { GradientHeader } from "../../components/GradientHeader";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { TabBar } from "../../components/TabBar";
+import { GradientHeader } from "@/components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { TabBar } from "@/components/TabBar";
 
-import { WeatherPill } from "../../components/WeatherPill";
-import { ShoeTrackerCard, Shoe } from "../../components/home/ShoeTrackerCard";
-import { AnnouncementsPreview, Announcement } from "../../components/home/AnnouncementsPreview";
+import { WeatherPill } from "@/components/WeatherPill";
+import { ShoeTrackerCard, Shoe } from "@/components/home/ShoeTrackerCard";
+import { AnnouncementsPreview, Announcement } from "@/components/home/AnnouncementsPreview";
 
 import { Store } from "../../lib/mcrStore";
 
@@ -28,14 +28,14 @@ function prettyDate(iso: string) {
     const dt = new Date(iso);
     return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   } catch {
-    return "—";
+    return "â€”";
   }
 }
 
 function medalFor(rank: number) {
-  if (rank === 1) return "🥇";
-  if (rank === 2) return "🥈";
-  if (rank === 3) return "🥉";
+  if (rank === 1) return "ðŸ¥‡";
+  if (rank === 2) return "ðŸ¥ˆ";
+  if (rank === 3) return "ðŸ¥‰";
   return null;
 }
 
@@ -194,7 +194,7 @@ export default function HomePage() {
     setRefreshNonce((n) => n + 1);
   }
 
-  // ✅ Month summary: GRAND TOTAL across ALL clubs for current runner (this month)
+  // âœ… Month summary: GRAND TOTAL across ALL clubs for current runner (this month)
   const monthMiles = useMemo(() => {
     if (!mounted || !me) return 0.0;
     const month = monthKeyYYYYMM();
@@ -228,7 +228,7 @@ export default function HomePage() {
     <div className="pb-28">
       <GradientHeader
         title="Good morning"
-        subtitle="Let’s make progress today."
+        subtitle="Letâ€™s make progress today."
         userName={me?.full_name ?? ""}
         clubName={clubName ?? undefined}
       />
@@ -273,7 +273,7 @@ export default function HomePage() {
 
             <div className="shrink-0">
               <div className="h-11 w-11 rounded-2xl bg-white/70 border border-black/5 shadow-[0_10px_22px_rgba(15,23,42,0.10)] flex items-center justify-center">
-                <span className="text-[18px]">🏁</span>
+                <span className="text-[18px]">ðŸ</span>
               </div>
             </div>
           </div>

@@ -1,13 +1,13 @@
-// app/clubs/announcements/page.tsx
+﻿// app/clubs/announcements/page.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Card } from "../../../components/ui/Card";
-import { Button } from "../../../components/ui/Button";
-import { TabBar } from "../../../components/TabBar";
-import { GradientHeader } from "../../../components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { TabBar } from "@/components/TabBar";
+import { GradientHeader } from "@/components/GradientHeader";
 import { Store, Announcement } from "../../../lib/mcrStore";
 
 function prettyDate(iso: string) {
@@ -357,7 +357,7 @@ export default function ClubAnnouncementsPage() {
                   onClick={onPostOrSave}
                   disabled={saving || deleting}
                 >
-                  {saving ? "Saving…" : mode === "create" ? "Post" : "Save"}
+                  {saving ? "Savingâ€¦" : mode === "create" ? "Post" : "Save"}
                 </Button>
               </div>
 
@@ -369,7 +369,7 @@ export default function ClubAnnouncementsPage() {
                     disabled={saving || deleting}
                     className="w-full text-[13px] font-semibold text-red-600 py-2 rounded-2xl hover:bg-red-50 disabled:opacity-60"
                   >
-                    {deleting ? "Deleting…" : "Delete announcement"}
+                    {deleting ? "Deletingâ€¦" : "Delete announcement"}
                   </button>
                 </div>
               ) : null}

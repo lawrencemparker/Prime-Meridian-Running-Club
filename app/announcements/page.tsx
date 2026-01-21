@@ -1,12 +1,12 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { GradientHeader } from "../../components/GradientHeader";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { TabBar } from "../../components/TabBar";
+import { GradientHeader } from "@/components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { TabBar } from "@/components/TabBar";
 import { Store } from "../../lib/mcrStore";
 
 function fmtRelative(iso: string) {
@@ -79,7 +79,7 @@ export default function AnnouncementsPage() {
               Join a running club
             </div>
             <p className="mt-1 text-[13px] text-black/55">
-              Announcements are available once you’re in a club.
+              Announcements are available once youâ€™re in a club.
             </p>
             <div className="mt-4">
               <Button variant="secondary" onClick={() => router.push("/clubs")}>
@@ -90,13 +90,13 @@ export default function AnnouncementsPage() {
         ) : items.length === 0 ? (
           <Card className="p-6 text-center">
             <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-black/5 flex items-center justify-center">
-              <span className="text-[22px]">📣</span>
+              <span className="text-[22px]">ðŸ“£</span>
             </div>
             <div className="text-[16px] font-semibold">No announcements yet</div>
             <p className="mt-1 text-[13px] text-black/55">
               {isAdmin
                 ? "Post your first update to keep everyone aligned."
-                : "Check back soon — your admin will post updates here."}
+                : "Check back soon â€” your admin will post updates here."}
             </p>
 
             {isAdmin ? (

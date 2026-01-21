@@ -1,7 +1,7 @@
-import { GradientHeader } from "../../components/GradientHeader";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { TabBar } from "../../components/TabBar";
+﻿import { GradientHeader } from "@/components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { TabBar } from "@/components/TabBar";
 
 export default function ProfilePage() {
   return (

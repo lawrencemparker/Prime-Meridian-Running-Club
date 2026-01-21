@@ -1,5 +1,5 @@
-import "./globals.css";
-import { MobileShell } from "../components/MobileShell";
+﻿import "./globals.css";
+import { MobileShell } from "@/components/MobileShell";
 
 export const metadata = {
   title: "My Club Running",

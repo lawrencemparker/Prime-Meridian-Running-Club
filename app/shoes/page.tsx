@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Store, type Shoe } from "../../lib/mcrStore";
 
 const TOAST_KEY = "mcr_flash_toast";
@@ -91,7 +91,7 @@ export default function ShoesPage() {
                     <div className="min-w-0">
                       <div className="font-semibold truncate">{s.name}</div>
                       <div className="mt-1 text-[12px] text-black/55">
-                        {Number(s.miles ?? 0).toFixed(1)} / {Number(s.limit ?? 0).toFixed(0)} miles ·{" "}
+                        {Number(s.miles ?? 0).toFixed(1)} / {Number(s.limit ?? 0).toFixed(0)} miles Â·{" "}
                         {isRetired ? "Retired" : "Active"}
                       </div>
                     </div>

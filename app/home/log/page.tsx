@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GradientHeader } from "../../components/GradientHeader";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
+import { GradientHeader } from "@/components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Store } from "../../lib/mcrStore";
 
 export default function LogPage() {

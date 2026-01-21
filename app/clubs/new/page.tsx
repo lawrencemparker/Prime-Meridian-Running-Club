@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "../../../components/ui/Card";
-import { Button } from "../../../components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Store } from "../../../lib/mcrStore";
 
 export default function CreateClubPage() {
@@ -49,7 +49,7 @@ export default function CreateClubPage() {
           Set up your community
         </div>
         <div className="mt-1 text-[13px] text-black/55 leading-relaxed">
-          Choose a name, set privacy, and invite runners when you’re ready.
+          Choose a name, set privacy, and invite runners when youâ€™re ready.
         </div>
 
         <div className="mt-5 space-y-4">
@@ -106,7 +106,7 @@ export default function CreateClubPage() {
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
               rows={3}
-              placeholder="Weekly runs, training plans, race goals…"
+              placeholder="Weekly runs, training plans, race goalsâ€¦"
               className="mt-2 w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 text-[15px] outline-none resize-none"
             />
           </div>
@@ -118,7 +118,7 @@ export default function CreateClubPage() {
 </Button>
 
           <Button onClick={create} disabled={!canCreate || busy}>
-            {busy ? "Creating…" : "Create club"}
+            {busy ? "Creatingâ€¦" : "Create club"}
           </Button>
         </div>
       </Card>

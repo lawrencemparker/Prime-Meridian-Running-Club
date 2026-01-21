@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { Card } from "../../../components/ui/Card";
-import { Button } from "../../../components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Store } from "../../../lib/mcrStore";
 
 export default function PremiumSuccessPage() {
@@ -20,12 +20,12 @@ export default function PremiumSuccessPage() {
       <Card className="w-full max-w-sm p-6 text-center">
         {/* Icon */}
         <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-blue-600/10 flex items-center justify-center">
-          <span className="text-[28px]">🎉</span>
+          <span className="text-[28px]">ðŸŽ‰</span>
         </div>
 
         {/* Title */}
         <h1 className="text-[20px] font-semibold tracking-[-0.01em]">
-          You’re now a Club Admin
+          Youâ€™re now a Club Admin
         </h1>
 
         {/* Body */}

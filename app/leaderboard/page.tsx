@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { GradientHeader } from "../../components/GradientHeader";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { TabBar } from "../../components/TabBar";
+import { GradientHeader } from "@/components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { TabBar } from "@/components/TabBar";
 import { Store } from "../../lib/mcrStore";
 
 function monthKeyYYYYMM(d = new Date()) {
@@ -20,9 +20,9 @@ function addMonths(d: Date, delta: number) {
 }
 
 function medalFor(rank: number) {
-  if (rank === 1) return "🥇";
-  if (rank === 2) return "🥈";
-  if (rank === 3) return "🥉";
+  if (rank === 1) return "ðŸ¥‡";
+  if (rank === 2) return "ðŸ¥ˆ";
+  if (rank === 3) return "ðŸ¥‰";
   return null;
 }
 
@@ -170,7 +170,7 @@ export default function LeaderboardPage() {
 
         if (!userId || !date || !Number.isFinite(miles)) continue;
 
-        // ✅ CRITICAL: club scoping (prevents cross-club totals)
+        // âœ… CRITICAL: club scoping (prevents cross-club totals)
         if (runClubId !== String(clubId)) continue;
 
         // STRICT membership filter (only members shown on this club leaderboard)
@@ -311,7 +311,7 @@ export default function LeaderboardPage() {
                 <div className="min-w-0">
                   <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Monthly reset</div>
                   <div className="mt-1 text-[13px] text-black/60">
-                    Resets this month’s leaderboard totals going forward. This does not delete runs.
+                    Resets this monthâ€™s leaderboard totals going forward. This does not delete runs.
                   </div>
                   {resetAtISO ? (
                     <div className="mt-2 text-[12px] text-black/45">
@@ -337,7 +337,7 @@ export default function LeaderboardPage() {
                 <div className="min-w-0">
                   <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Your rank</div>
                   <div className="mt-1 font-semibold">
-                    #{myRow.rank} · {myRow.total_miles.toFixed(1)} miles
+                    #{myRow.rank} Â· {myRow.total_miles.toFixed(1)} miles
                   </div>
                 </div>
                 <div className="text-[12px] text-black/55">You</div>

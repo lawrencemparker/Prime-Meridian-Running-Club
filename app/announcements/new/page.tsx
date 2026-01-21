@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Card } from "../../../components/ui/Card";
-import { Button } from "../../../components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Store } from "../../../lib/mcrStore";
 
 const TOAST_KEY = "mcr_flash_toast";
@@ -99,7 +99,7 @@ export default function NewAnnouncementPage() {
                 Post an update
               </div>
               <p className="mt-1 text-[13px] text-black/55 leading-relaxed">
-                Members can read announcements — only admins can post.
+                Members can read announcements â€” only admins can post.
               </p>
             </div>
 

@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-import { Card } from "../../../../components/ui/Card";
-import { Button } from "../../../../components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Store } from "../../../../lib/mcrStore";
 
 export default function EditAnnouncementPage() {
@@ -108,7 +108,7 @@ export default function EditAnnouncementPage() {
               Cancel
             </Button>
             <Button className="w-1/2" onClick={onSave} disabled={saving}>
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Savingâ€¦" : "Save"}
             </Button>
           </div>
         </div>

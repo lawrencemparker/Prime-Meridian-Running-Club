@@ -1,12 +1,12 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { GradientHeader } from "../../components/GradientHeader";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { TabBar } from "../../components/TabBar";
+import { GradientHeader } from "@/components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { TabBar } from "@/components/TabBar";
 
 import { Store } from "../../lib/mcrStore";
 
@@ -52,7 +52,7 @@ export default function LogRunPage() {
     }
   }, [mounted]);
 
-  // ✅ ONLY active shoes (not retired). "retired" does not exist in your Shoe type.
+  // âœ… ONLY active shoes (not retired). "retired" does not exist in your Shoe type.
   const activeShoes = useMemo(() => {
     if (!mounted) return [];
     try {
@@ -144,7 +144,7 @@ export default function LogRunPage() {
         miles: Number(milesNum),
         type,
         race_name: type === "race" ? raceName.trim() : "",
-        // ✅ prefer undefined over empty string
+        // âœ… prefer undefined over empty string
         shoe_id: shoeId ? String(shoeId) : undefined,
         notes: notes.trim(),
       };

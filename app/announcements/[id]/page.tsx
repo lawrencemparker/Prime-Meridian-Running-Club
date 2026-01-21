@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-import { Card } from "../../../components/ui/Card";
-import { Button } from "../../../components/ui/Button";
-import { GradientHeader } from "../../../components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { GradientHeader } from "@/components/GradientHeader";
 import { Store } from "../../../lib/mcrStore";
 
 function prettyDate(iso: string) {
@@ -13,7 +13,7 @@ function prettyDate(iso: string) {
     const dt = new Date(iso);
     return dt.toLocaleString();
   } catch {
-    return "—";
+    return "â€”";
   }
 }
 

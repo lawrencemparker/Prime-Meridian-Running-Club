@@ -1,12 +1,12 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { GradientHeader } from "../../../components/GradientHeader";
-import { Card } from "../../../components/ui/Card";
-import { Button } from "../../../components/ui/Button";
-import { TabBar } from "../../../components/TabBar";
+import { GradientHeader } from "@/components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { TabBar } from "@/components/TabBar";
 
 import { Store } from "../../../lib/mcrStore";
 
@@ -44,7 +44,7 @@ export default function ClubMembersPage() {
 
   const [mounted, setMounted] = useState(false);
 
-  // toast banner (optional, but avoids “black” alert style and confirms actions)
+  // toast banner (optional, but avoids â€œblackâ€ alert style and confirms actions)
   const [toast, setToast] = useState("");
 
   // Add Member modal
@@ -401,7 +401,7 @@ export default function ClubMembersPage() {
                     className="h-10 w-10 rounded-2xl bg-black/5 hover:bg-black/10 active:bg-black/15 transition flex items-center justify-center"
                     aria-label="Close"
                   >
-                    <span className="text-[18px] leading-none">×</span>
+                    <span className="text-[18px] leading-none">Ã—</span>
                   </button>
                 </div>
 

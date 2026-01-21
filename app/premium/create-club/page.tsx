@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "../../../components/ui/Card";
-import { Button } from "../../../components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Store } from "../../../lib/mcrStore";
 
 export default function PremiumCreateClubPage() {
@@ -13,7 +13,7 @@ export default function PremiumCreateClubPage() {
   const premiumActive = useMemo(() => Store.isPremium(), []);
 
   async function startPremium() {
-    // Placeholder “payment” flow (local entitlement).
+    // Placeholder â€œpaymentâ€ flow (local entitlement).
     // Later: replace this block with Stripe/RevenueCat/etc.
     setBusy(true);
     try {
@@ -33,12 +33,12 @@ export default function PremiumCreateClubPage() {
             Create & lead your running club
           </div>
           <div className="mt-2 text-[14px] text-black/55 leading-relaxed">
-            Organize your runners, track team progress, and stay connected — safely.
+            Organize your runners, track team progress, and stay connected â€” safely.
           </div>
 
           <div className="mt-4">
             <Button onClick={startPremium} disabled={busy}>
-              {busy ? "Starting…" : premiumActive ? "Continue" : "Start my club"}
+              {busy ? "Startingâ€¦" : premiumActive ? "Continue" : "Start my club"}
             </Button>
           </div>
         </div>
@@ -53,27 +53,27 @@ export default function PremiumCreateClubPage() {
             <Feature
               title="Team leaderboards"
               body="See total miles across your club each month."
-              icon="🏃"
+              icon="ðŸƒ"
             />
             <Feature
               title="Club announcements"
               body="Share workouts, schedule changes, and race plans."
-              icon="📣"
+              icon="ðŸ“£"
             />
             <Feature
               title="Member directory"
               body="Access names, phone numbers, and emails for coordination."
-              icon="👥"
+              icon="ðŸ‘¥"
             />
             <Feature
               title="Safety-first design"
-              body="Emergency info stays private — visible to admins only."
-              icon="🛡"
+              body="Emergency info stays private â€” visible to admins only."
+              icon="ðŸ›¡"
             />
             <Feature
               title="Full control"
               body="Invite, approve, and manage members anytime."
-              icon="🧠"
+              icon="ðŸ§ "
             />
           </div>
         </Card>
@@ -85,7 +85,7 @@ export default function PremiumCreateClubPage() {
           </div>
           <div className="mt-2 text-[14px] text-black/65 leading-relaxed">
             Trusted by running clubs, training groups, and race teams. Designed to help you
-            lead with clarity — and keep your group connected.
+            lead with clarity â€” and keep your group connected.
           </div>
         </Card>
 
@@ -106,16 +106,16 @@ export default function PremiumCreateClubPage() {
             Includes:
           </div>
           <ul className="mt-2 space-y-1 text-[13px] text-black/55">
-            <li>• Unlimited members</li>
-            <li>• Club leaderboards</li>
-            <li>• Announcements</li>
-            <li>• Member directory</li>
-            <li>• Admin controls</li>
+            <li>â€¢ Unlimited members</li>
+            <li>â€¢ Club leaderboards</li>
+            <li>â€¢ Announcements</li>
+            <li>â€¢ Member directory</li>
+            <li>â€¢ Admin controls</li>
           </ul>
 
           <div className="mt-5">
             <Button onClick={startPremium} disabled={busy}>
-              {busy ? "Starting…" : "Start my club"}
+              {busy ? "Startingâ€¦" : "Start my club"}
             </Button>
           </div>
 
@@ -124,13 +124,13 @@ export default function PremiumCreateClubPage() {
             className="mt-3 w-full text-center text-[13px] text-black/45"
             type="button"
           >
-            Already invited to a club? Join instead →
+            Already invited to a club? Join instead â†’
           </button>
         </Card>
 
         {/* FOOTER */}
         <div className="px-1 pt-2 text-[12px] text-black/40 leading-relaxed">
-          Members don’t need Premium to join. Only club admins pay.
+          Members donâ€™t need Premium to join. Only club admins pay.
         </div>
       </div>
     </div>

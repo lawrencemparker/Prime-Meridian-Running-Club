@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "../../../components/ui/Card";
-import { Button } from "../../../components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Store } from "../../../lib/mcrStore";
 
 const TOAST_KEY = "mcr_flash_toast";
@@ -123,7 +123,7 @@ export default function AddShoeModalPage() {
                 className="h-10 w-10 rounded-2xl bg-black/5 hover:bg-black/10 active:bg-black/15 transition flex items-center justify-center"
                 aria-label="Close"
               >
-                <span className="text-[18px] leading-none">×</span>
+                <span className="text-[18px] leading-none">Ã—</span>
               </button>
             </div>
 

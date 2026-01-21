@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GradientHeader } from "../../components/GradientHeader";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { TabBar } from "../../components/TabBar";
+import { GradientHeader } from "@/components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { TabBar } from "@/components/TabBar";
 import { Store, type Club, type ClubMembership } from "../../lib/mcrStore";
 
 type ConfirmState =
@@ -162,7 +162,7 @@ export default function ClubsPage() {
                   <div>
                     <div className="text-[16px] font-semibold">{c.name}</div>
                     <div className="mt-2 text-[12px] text-black/45">
-                      Role: {myRole(c.id) ?? "—"}
+                      Role: {myRole(c.id) ?? "â€”"}
                     </div>
                   </div>
 
@@ -196,7 +196,7 @@ export default function ClubsPage() {
         </div>
       </div>
 
-      {/* Confirmation modal – positioned higher */}
+      {/* Confirmation modal â€“ positioned higher */}
       {confirm && (
         <div className="fixed inset-0 z-50">
           <button
@@ -226,7 +226,7 @@ export default function ClubsPage() {
                     onClick={closeConfirm}
                     className="h-10 w-10 rounded-2xl bg-black/5 flex items-center justify-center"
                   >
-                    ×
+                    Ã—
                   </button>
                 </div>
 

@@ -1,12 +1,12 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { GradientHeader } from "../../components/GradientHeader";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { TabBar } from "../../components/TabBar";
+import { GradientHeader } from "@/components/GradientHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { TabBar } from "@/components/TabBar";
 import { Store } from "../../lib/mcrStore";
 
 const FLASH_TOAST_KEY = "mcr_flash_toast";
@@ -40,7 +40,7 @@ function fmtDate(isoYYYYMMDD: string) {
 
 function fmtType(run_type: string, race_name?: string | null) {
   const t = (run_type || "").toLowerCase();
-  if (t === "race") return race_name?.trim() ? `Race · ${race_name.trim()}` : "Race";
+  if (t === "race") return race_name?.trim() ? `Race Â· ${race_name.trim()}` : "Race";
   if (t === "training") return "Training";
   if (t === "other") return "Other";
   return run_type || "Run";
@@ -270,7 +270,7 @@ export default function HistoryPage() {
                 Summary
               </div>
               <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em]">
-                {scope === "month" ? "This month" : "All time"} · {totalMiles.toFixed(1)} miles
+                {scope === "month" ? "This month" : "All time"} Â· {totalMiles.toFixed(1)} miles
               </div>
               <div className="mt-1 text-[13px] text-black/55">
                 Tap a run to edit details or delete an entry.
@@ -355,14 +355,14 @@ export default function HistoryPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="font-semibold tracking-[-0.01em]">
-                          {fmtDate(r.run_date)} · {Number(r.miles).toFixed(1)} mi
+                          {fmtDate(r.run_date)} Â· {Number(r.miles).toFixed(1)} mi
                         </div>
                         <div className="mt-1 text-[13px] text-black/60">
                           {fmtType(r.run_type, r.race_name)}
                           {shoeLabel ? (
                             <>
                               {" "}
-                              · <span className="text-black/70">{shoeLabel}</span>
+                              Â· <span className="text-black/70">{shoeLabel}</span>
                             </>
                           ) : null}
                         </div>
@@ -373,7 +373,7 @@ export default function HistoryPage() {
                         ) : null}
                       </div>
 
-                      <div className="shrink-0 text-[12px] text-black/45">{r.shoe_id ? "👟" : ""}</div>
+                      <div className="shrink-0 text-[12px] text-black/45">{r.shoe_id ? "ðŸ‘Ÿ" : ""}</div>
                     </div>
                   </button>
                 );
@@ -402,12 +402,12 @@ export default function HistoryPage() {
                         Edit run
                       </div>
                       <div className="mt-1 text-[18px] font-semibold tracking-[-0.01em]">
-                        {fmtDate(activeRun.run_date)} · {Number(activeRun.miles).toFixed(1)} mi
+                        {fmtDate(activeRun.run_date)} Â· {Number(activeRun.miles).toFixed(1)} mi
                       </div>
                       <div className="mt-1 text-[13px] text-black/55">
                         Shoe mileage updates automatically.
                       <div className="mt-1 text-[13px] text-black/55">
-                        Club: <span className="font-medium text-black/70">{clubNameById.get(String(activeRun.club_id ?? "")) ?? "—"}</span>
+                        Club: <span className="font-medium text-black/70">{clubNameById.get(String(activeRun.club_id ?? "")) ?? "â€”"}</span>
                       </div>
                       </div>
                     </div>
@@ -418,7 +418,7 @@ export default function HistoryPage() {
                       aria-label="Close"
                       disabled={busy}
                     >
-                      <span className="text-[18px] leading-none">×</span>
+                      <span className="text-[18px] leading-none">Ã—</span>
                     </button>
                   </div>
 
