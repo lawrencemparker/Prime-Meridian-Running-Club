@@ -57,6 +57,7 @@ const userName = useMemo(() => {
 }, [mounted]);
 
 
+
   const clubId = useMemo(() => {
     return Store.getActiveClubId() ?? Store.getMyApprovedClubId();
   }, []);
@@ -197,6 +198,7 @@ const userName = useMemo(() => {
       <GradientHeader
         title="Announcements"
         subtitle={clubName ?? ""}
+userName={userName}
         rightSlot={
           isAdmin ? (
             <Button
