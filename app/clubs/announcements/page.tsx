@@ -51,6 +51,12 @@ export default function ClubAnnouncementsPage() {
   const [banner, setBanner] = useState<string | null>(null);
   const bannerTimerRef = useRef<number | null>(null);
 
+const userName = useMemo(() => {
+  if (!mounted) return "Runner";
+  return Store.getMe()?.full_name ?? "Runner";
+}, [mounted]);
+
+
   const clubId = useMemo(() => {
     return Store.getActiveClubId() ?? Store.getMyApprovedClubId();
   }, []);
