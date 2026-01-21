@@ -36,6 +36,12 @@ export default function AnnouncementDetailPage() {
 }, [mounted, id]);
 
 
+const userName = useMemo(() => {
+  if (!mounted) return "Runner";
+  return Store.getMe()?.full_name ?? "Runner";
+}, [mounted]);
+
+
   const clubName = useMemo(() => {
     if (!mounted || !announcement) return null;
     return Store.getClubName?.(announcement.club_id) ?? null;
