@@ -50,10 +50,12 @@ const userName = useMemo(() => {
   return (
     <div className="pb-24">
       <GradientHeader
-        title="Announcement"
-        subtitle={clubName ? `Club: ${clubName}` : "Club update"}
-        clubName={clubName ?? undefined}
-      />
+  title="Announcement"
+  subtitle={clubName ? `Club: ${clubName}` : "Club update"}
+  clubName={clubName ?? undefined}
+  userName={userName}
+/>
+
 
       <div className="px-5 mt-4">
         {!announcement ? (
