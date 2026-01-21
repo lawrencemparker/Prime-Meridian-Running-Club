@@ -14,6 +14,8 @@ export type User = {
 export type Club = {
   id: string;
   name: string;
+  description?: string | null;
+  is_private?: boolean;
   created_at: string;
 };
 
@@ -165,8 +167,9 @@ function seedDefaultData() {
 const seedIdA = uid();
 const seedIdB = uid();
 
-const clubA: Club = { id: seedIdA, name: "Prime Meridian Klub", created_at: nowISO() };
-const clubB: Club = { id: seedIdB, name: "BMR Miami", created_at: nowISO() };
+const clubA: Club = { id: seedIdA, name: "Prime Meridian Klub", description: "", is_private: false, created_at: nowISO() };
+const clubB: Club = { id: seedIdB, name: "BMR Miami", description: "", is_private: false, created_at: nowISO() };
+
 
 
   writeJSON(K_ME, me);
@@ -368,8 +371,16 @@ export const Store = {
   /* ---------- clubs ---------- */
 
   listClubs(): Club[] {
-    return readJSON<Club[]>(K_CLUBS, []);
-  },
+  const clubs = readJSON<any[]>(K_CLUBS, []);
+  return clubs.map((c) => ({
+    id: String(c?.id ?? ""),
+    name: String(c?.name ?? "").trim(),
+    description: c?.description != null ? String(c.description) : "",
+    is_private: Boolean(c?.is_private),
+    created_at: String(c?.created_at ?? nowISO()),
+  })).filter((c) => c.id && c.name);
+},
+
 
   getClubName(clubId: string): string | null {
     const cid = String(clubId ?? "");
@@ -395,6 +406,59 @@ export const Store = {
     writeJSON(K_ACTIVE_CLUB, clubId);
     if (isBrowser()) window.dispatchEvent(new Event(ACTIVE_CLUB_CHANGED_EVENT));
   },
+
+  createClub(input: any): Club {
+    return (Store as any).addClub(input);
+  },
+
+  addClub(input: any): Club {
+    Store.ensureSeeded();
+
+    const name = String(input?.name ?? "").trim();
+    const description = input?.description != null ? String(input.description).trim() : "";
+    const is_private = Boolean(input?.is_private);
+
+    if (!name || name.length < 2) throw new Error("Club name is required.");
+
+    const clubs = Store.listClubs();
+
+    // Prevent duplicates by name (case-insensitive)
+    const dup = clubs.find((c) => String(c.name).toLowerCase() === name.toLowerCase());
+    if (dup) throw new Error("A club with that name already exists.");
+
+    const club: Club = {
+      id: uid(),
+      name,
+      description: description || "",
+      is_private,
+      created_at: nowISO(),
+    };
+
+    clubs.unshift(club);
+    writeJSON(K_CLUBS, clubs);
+
+    // Make creator admin member of the new club
+    const me = Store.getMe();
+    if (me) {
+      const memberships = Store.listMemberships();
+      memberships.unshift({
+        id: uid(),
+        club_id: club.id,
+        full_name: me.full_name,
+        email: me.email,
+        phone: me.phone,
+        is_admin: true,
+        created_at: nowISO(),
+      });
+      writeJSON(K_MEMBERSHIPS, memberships);
+    }
+
+    // Switch active club to the newly created club
+    Store.setActiveClubId(club.id);
+
+    return club;
+  },
+
 
   /* ---------- memberships ---------- */
 
