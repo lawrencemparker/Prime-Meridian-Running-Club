@@ -4,22 +4,40 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Store } from "../../lib/mcrStore";
+
 export default function SplashPage() {
   const router = useRouter();
   const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
+    // Decide destination early (onboarding gate)
+    let destination = "/home";
+
+    try {
+      Store.ensureSeeded?.();
+      const complete =
+        typeof (Store as any).isProfileComplete === "function"
+          ? (Store as any).isProfileComplete()
+          : true;
+
+      destination = complete ? "/home" : "/onboarding";
+    } catch {
+      // If anything fails, fall back to /home (non-blocking)
+      destination = "/home";
+    }
+
     // Once per session: if already seen, skip immediately
     const seen = sessionStorage.getItem("mcr_splash_seen");
     if (seen === "1") {
-      router.replace("/home");
+      router.replace(destination);
       return;
     }
     sessionStorage.setItem("mcr_splash_seen", "1");
 
     // Calm & elegant timing (~2.5s total)
     const t1 = setTimeout(() => setExiting(true), 2000); // start fade-out
-    const t2 = setTimeout(() => router.replace("/home"), 2550); // navigate after fade
+    const t2 = setTimeout(() => router.replace(destination), 2550); // navigate after fade
 
     return () => {
       clearTimeout(t1);
