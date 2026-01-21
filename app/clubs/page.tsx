@@ -6,7 +6,7 @@ import { GradientHeader } from "@/components/GradientHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { TabBar } from "@/components/TabBar";
-import { Store, type Club, type ClubMembership } from "../../lib/mcrStore";
+import { Store, type Club, type ClubMembership } from "@/lib/mcrStore";
 
 type ConfirmState =
   | null

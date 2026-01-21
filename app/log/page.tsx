@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { TabBar } from "@/components/TabBar";
 
-import { Store } from "../../lib/mcrStore";
+import { Store } from "@/lib/mcrStore";
 
 const FLASH_TOAST_KEY = "mcr_flash_toast_v1";
 

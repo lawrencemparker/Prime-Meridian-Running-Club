@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Store, type Shoe } from "../../lib/mcrStore";
+import { Store, type Shoe } from "@/lib/mcrStore";
 
 const TOAST_KEY = "mcr_flash_toast";
 

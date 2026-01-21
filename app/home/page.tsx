@@ -12,7 +12,7 @@ import { WeatherPill } from "@/components/WeatherPill";
 import { ShoeTrackerCard, Shoe } from "@/components/home/ShoeTrackerCard";
 import { AnnouncementsPreview, Announcement } from "@/components/home/AnnouncementsPreview";
 
-import { Store } from "../../lib/mcrStore";
+import { Store } from "@/lib/mcrStore";
 
 const FLASH_TOAST_KEY = "mcr_flash_toast";
 const ACTIVE_CLUB_CHANGED_EVENT = "mcr_active_club_changed";

@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { Store } from "../../lib/mcrStore";
+import { Store } from "@/lib/mcrStore";
 
 export default function SplashPage() {
   const router = useRouter();

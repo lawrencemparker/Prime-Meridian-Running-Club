@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { GradientHeader } from "@/components/GradientHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Store } from "../../lib/mcrStore";
+import { Store } from "@/lib/mcrStore";
 
 export default function LogPage() {
   const router = useRouter();
