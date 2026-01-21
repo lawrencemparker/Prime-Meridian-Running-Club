@@ -46,7 +46,7 @@ $remoteNames = git remote
 if ($remoteNames -notcontains "origin") {
   git remote add origin https://github.com/lawrencemparker/Prime-Meridian-Running-Club.git
 } else {
-  git remote set-url origin hhttps://github.com/lawrencemparker/Prime-Meridian-Running-Club.git
+  git remote set-url origin https://github.com/lawrencemparker/Prime-Meridian-Running-Club.git
 }
 
 # Fetch remote refs
