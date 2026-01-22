@@ -1,4 +1,5 @@
-﻿"use client";
+﻿// app/shoes/page.tsx
+"use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -91,14 +92,15 @@ export default function ShoesPage() {
                     <div className="min-w-0">
                       <div className="font-semibold truncate">{s.name}</div>
                       <div className="mt-1 text-[12px] text-black/55">
-                        {Number(s.miles ?? 0).toFixed(1)} / {Number(s.limit ?? 0).toFixed(0)} miles Â·{" "}
-                        {isRetired ? "Retired" : "Active"}
+                        {Number(s.miles ?? 0).toFixed(1)} / {Number(s.limit ?? 0).toFixed(0)} miles{" "}
+                        {"\u00B7"} {isRetired ? "Retired" : "Active"}
                       </div>
                     </div>
 
                     <button
                       onClick={() => toggleRetired(s)}
                       className="shrink-0 rounded-xl border border-black/10 bg-white/70 px-3 py-2 text-[13px] font-semibold hover:bg-white active:bg-white"
+                      type="button"
                     >
                       {isRetired ? "Unretire" : "Retire"}
                     </button>

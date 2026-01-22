@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -57,7 +57,8 @@ export default function AnnouncementsPage() {
         title="Announcements"
         subtitle={clubName ? "Updates from your club." : "Join a club to see announcements."}
         userName={me?.full_name ?? ""}
-        clubName={clubName}
+        clubName={clubName ?? undefined}
+
         rightSlot={
           clubId && isAdmin ? (
             <Button

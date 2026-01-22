@@ -51,33 +51,37 @@ export default function ClubAnnouncementsPage() {
   const [banner, setBanner] = useState<string | null>(null);
   const bannerTimerRef = useRef<number | null>(null);
 
-const userName = useMemo(() => {
-  if (!mounted) return "Runner";
-  return Store.getMe()?.full_name ?? "Runner";
-}, [mounted]);
-
-
-
-  const clubId = useMemo(() => {
-    return Store.getActiveClubId() ?? Store.getMyApprovedClubId();
-  }, []);
-
-  const clubName = useMemo(() => {
-    if (!clubId) return null;
-    return Store.getClubName(clubId);
-  }, [clubId]);
-
-  const isAdmin = useMemo(() => {
-    if (!clubId) return false;
-    return Store.isClubAdmin(clubId);
-  }, [clubId]);
-
   useEffect(() => {
     setMounted(true);
     return () => {
       if (bannerTimerRef.current) window.clearTimeout(bannerTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    Store.ensureSeeded?.();
+  }, [mounted]);
+
+  const userName = useMemo(() => {
+    if (!mounted) return "Runner";
+    return Store.getMe()?.full_name ?? "Runner";
+  }, [mounted]);
+
+  const clubId = useMemo(() => {
+    if (!mounted) return null;
+    return Store.getActiveClubId() ?? Store.getMyApprovedClubId();
+  }, [mounted]);
+
+  const clubName = useMemo(() => {
+    if (!mounted || !clubId) return null;
+    return Store.getClubName(clubId);
+  }, [mounted, clubId]);
+
+  const isAdmin = useMemo(() => {
+    if (!mounted || !clubId) return false;
+    return Store.isClubAdmin(clubId);
+  }, [mounted, clubId]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -198,7 +202,7 @@ const userName = useMemo(() => {
       <GradientHeader
         title="Announcements"
         subtitle={clubName ?? ""}
-userName={userName}
+        userName={userName}
         rightSlot={
           isAdmin ? (
             <Button
@@ -214,7 +218,9 @@ userName={userName}
       <div className="px-5 space-y-4 mt-2">
         {banner ? (
           <Card className="px-4 py-3 border border-emerald-200 bg-emerald-50">
-            <div className="text-[13px] text-emerald-900 font-semibold">{banner}</div>
+            <div className="text-[13px] text-emerald-900 font-semibold">
+              {banner}
+            </div>
           </Card>
         ) : null}
 
@@ -366,7 +372,7 @@ userName={userName}
                   onClick={onPostOrSave}
                   disabled={saving || deleting}
                 >
-                  {saving ? "Savingâ€¦" : mode === "create" ? "Post" : "Save"}
+                  {saving ? "Saving..." : mode === "create" ? "Post" : "Save"}
                 </Button>
               </div>
 
@@ -378,7 +384,7 @@ userName={userName}
                     disabled={saving || deleting}
                     className="w-full text-[13px] font-semibold text-red-600 py-2 rounded-2xl hover:bg-red-50 disabled:opacity-60"
                   >
-                    {deleting ? "Deletingâ€¦" : "Delete announcement"}
+                    {deleting ? "Deleting..." : "Delete announcement"}
                   </button>
                 </div>
               ) : null}

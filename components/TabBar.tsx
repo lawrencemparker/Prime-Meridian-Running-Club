@@ -39,8 +39,13 @@ function inferActive(pathname: string): TabKey {
   if (p.startsWith("/clubs")) return "clubs";
   if (p.startsWith("/profile")) return "profile";
 
-  // Fallback: if someone lands on "/" treat as home
-  if (p === "/" || p.startsWith("/announcements") || p.startsWith("/shoes") || p.startsWith("/premium")) {
+  // Fallback: treat these as "home"
+  if (
+    p === "/" ||
+    p.startsWith("/announcements") ||
+    p.startsWith("/shoes") ||
+    p.startsWith("/premium")
+  ) {
     return "home";
   }
 

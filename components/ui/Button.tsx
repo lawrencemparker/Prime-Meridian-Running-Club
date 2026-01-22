@@ -1,22 +1,22 @@
+// components/ui/Button.tsx
+"use client";
+
 import React from "react";
 
-type Variant = "primary" | "secondary" | "ghost";
+export type Variant = "primary" | "secondary" | "ghost";
+
+export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: Variant;
+};
 
 export function Button({
   children,
-  onClick,
   type = "button",
   variant = "primary",
   className = "",
   disabled,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  type?: "button" | "submit";
-  variant?: Variant;
-  className?: string;
-  disabled?: boolean;
-}) {
+  ...props
+}: ButtonProps) {
   const base =
     "w-full h-[54px] rounded-full px-6 text-[16px] font-semibold tracking-[-0.01em] " +
     "transition-all duration-150 active:scale-[0.985] " +
@@ -46,9 +46,9 @@ export function Button({
   return (
     <button
       type={type}
-      onClick={onClick}
       disabled={disabled}
       className={[base, styles, className].join(" ")}
+      {...props}
     >
       {children}
     </button>

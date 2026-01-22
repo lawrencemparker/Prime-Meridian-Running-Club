@@ -48,7 +48,6 @@ export default function CreateClubPage() {
     try {
       setSaving(true);
 
-      // Store.createClub now exists (added in lib/mcrStore.ts)
       const club = Store.createClub({
         name: n,
         is_private: isPrivate,
@@ -109,16 +108,10 @@ export default function CreateClubPage() {
             </button>
           </div>
 
-          {err ? (
-            <div className="mt-4 text-[13px] text-red-600">{err}</div>
-          ) : null}
+          {err ? <div className="mt-4 text-[13px] text-red-600">{err}</div> : null}
 
           <div className="mt-5 flex gap-3">
-            <Button
-              variant="secondary"
-              onClick={() => router.back()}
-              disabled={saving}
-            >
+            <Button variant="secondary" onClick={() => router.back()} disabled={saving}>
               Cancel
             </Button>
             <Button onClick={onCreate} disabled={saving}>

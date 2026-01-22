@@ -1,11 +1,12 @@
-﻿"use client";
+﻿// app/home/leaderboard/page.tsx
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { GradientHeader } from "@/components/GradientHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { TabBar } from "@/components/TabBar";
-import { Store } from "@/lib/mcrStore";
+import { Store, ACTIVE_CLUB_CHANGED_EVENT } from "@/lib/mcrStore";
 
 function monthKeyYYYYMM(d = new Date()) {
   const y = d.getFullYear();
@@ -19,10 +20,11 @@ function addMonths(d: Date, delta: number) {
   return copy;
 }
 
+// Use Unicode escapes to avoid encoding/emoji mojibake issues.
 function medalFor(rank: number) {
-  if (rank === 1) return "ðŸ¥‡";
-  if (rank === 2) return "ðŸ¥ˆ";
-  if (rank === 3) return "ðŸ¥‰";
+  if (rank === 1) return "\u{1F947}"; // 🥇
+  if (rank === 2) return "\u{1F948}"; // 🥈
+  if (rank === 3) return "\u{1F949}"; // 🥉
   return null;
 }
 
@@ -38,6 +40,13 @@ type ResetMap = {
   [clubId: string]: {
     [monthYYYYMM: string]: string; // ISO timestamp
   };
+};
+
+type Row = {
+  rank: number;
+  id: string;
+  full_name: string;
+  total_miles: number;
 };
 
 function readResets(): ResetMap {
@@ -66,11 +75,12 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    Store.ensureSeeded?.();
+    Store.ensureSeeded();
   }, [mounted]);
 
   // Refresh on focus (reflect club selection changes from Home/Clubs)
   const [refreshNonce, setRefreshNonce] = useState(0);
+
   useEffect(() => {
     if (!mounted) return;
     const onFocus = () => setRefreshNonce((n) => n + 1);
@@ -81,25 +91,26 @@ export default function LeaderboardPage() {
   useEffect(() => {
     if (!mounted) return;
     const onClub = () => setRefreshNonce((n) => n + 1);
-    window.addEventListener("mcr_active_club_changed", onClub as any);
-    return () => window.removeEventListener("mcr_active_club_changed", onClub as any);
+    window.addEventListener(ACTIVE_CLUB_CHANGED_EVENT, onClub as any);
+    return () => window.removeEventListener(ACTIVE_CLUB_CHANGED_EVENT, onClub as any);
   }, [mounted]);
 
+  const me = useMemo(() => (mounted ? Store.getMe() : null), [mounted, refreshNonce]);
+  const userName = useMemo(() => (me?.full_name ? String(me.full_name) : "Runner"), [me]);
 
-  const me = useMemo(() => (mounted ? Store.getMe?.() ?? null : null), [mounted]);
-
-  const clubId = mounted ? Store.getCurrentClubId?.() ?? null : null;
+  const clubId = useMemo(() => {
+    if (!mounted) return null;
+    return Store.getCurrentClubId() ?? null;
+  }, [mounted, refreshNonce]);
 
   const clubName = useMemo(() => {
     if (!mounted || !clubId) return null;
-    if (typeof Store.getClubName === "function") return Store.getClubName(clubId);
-    const clubs = typeof Store.listClubs === "function" ? Store.listClubs() : [];
-    return clubs.find((c: any) => c.id === clubId)?.name ?? null;
+    return Store.getClubName(clubId);
   }, [mounted, clubId, refreshNonce]);
 
   const isAdmin = useMemo(() => {
     if (!mounted || !clubId) return false;
-    return typeof Store.isClubAdmin === "function" ? Store.isClubAdmin(clubId) : false;
+    return Store.isClubAdmin(clubId);
   }, [mounted, clubId, refreshNonce]);
 
   const [scope, setScope] = useState<Scope>("this_month");
@@ -108,10 +119,10 @@ export default function LeaderboardPage() {
   const [shoeFilterId, setShoeFilterId] = useState<string>(""); // "" = all shoes
 
   const activeShoes = useMemo(() => {
-    if (!mounted) return [] as any[];
-    const list = typeof Store.listShoes === "function" ? (Store.listShoes() as any[]) : [];
+    if (!mounted) return [] as { id: string; name: string }[];
+    const list = Store.listShoes() as any[];
     return list
-      .filter((s) => s && s.active === true) // only active shoes for filtering
+      .filter((s) => s && s.active === true)
       .map((s) => ({ id: String(s.id), name: String(s.name ?? "Shoe") }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [mounted, refreshNonce]);
@@ -126,12 +137,12 @@ export default function LeaderboardPage() {
     const now = new Date();
     if (scope === "this_month") return monthKeyYYYYMM(now);
     if (scope === "last_month") return monthKeyYYYYMM(addMonths(now, -1));
-    return null; // all_time
+    return null;
   }, [scope]);
 
   const resetAtISO = useMemo(() => {
     if (!mounted || !clubId) return null;
-    if (scope !== "this_month") return null; // reset logic only applies to "this month"
+    if (scope !== "this_month") return null;
     const month = monthForScope;
     if (!month) return null;
     const map = readResets();
@@ -149,64 +160,48 @@ export default function LeaderboardPage() {
     map[clubId] = clubMap;
     writeResets(map);
 
-    // Refresh UI immediately
     setRefreshNonce((n) => n + 1);
   }
 
-  const rows = useMemo(() => {
+  const rows = useMemo<Row[]>(() => {
     if (!mounted || !clubId) return [];
 
-    // STRICT: only members of selected club are eligible
-    const members: any[] =
-      typeof Store.listMembers === "function" ? (Store.listMembers(clubId) as any[]) : [];
-
+    const members: any[] = Store.listMembers(clubId) as any[];
     const memberIds = new Set<string>(members.map((m) => String(m.id)));
 
     const milesByUser = new Map<string, number>();
-
     const month = monthForScope; // YYYY-MM or null (all time)
     const resetAt = resetAtISO ? Date.parse(resetAtISO) : null;
 
-    if (typeof (Store as any).listRuns === "function") {
-      const runs = (Store as any).listRuns() as any[];
-      for (const r of runs) {
-        const userId = String(r.user_id ?? "");
-        const runClubId = r.club_id ? String(r.club_id) : "";
+    const runs = (Store as any).listRuns ? ((Store as any).listRuns() as any[]) : [];
 
-        const date = String(r.run_date ?? "");
-        const miles = Number(r.miles ?? 0);
-        const shoeId = r.shoe_id ? String(r.shoe_id) : "";
+    for (const r of runs) {
+      const userId = String(r.user_id ?? "");
+      const runClubId = r.club_id ? String(r.club_id) : "";
+      const date = String(r.run_date ?? "");
+      const miles = Number(r.miles ?? 0);
+      const shoeId = r.shoe_id ? String(r.shoe_id) : "";
 
-        if (!userId || !date || !Number.isFinite(miles)) continue;
+      if (!userId || !date || !Number.isFinite(miles)) continue;
+      if (!memberIds.has(userId)) continue;
+      if (String(runClubId) !== String(clubId)) continue;
 
-        // STRICT membership filter
-        if (!memberIds.has(userId)) continue;
+      if (month && !date.startsWith(month)) continue;
 
-        // STRICT club filter (runs must be logged under the selected club)
-        if (String(runClubId) !== String(clubId)) continue;
-
-        // Scope filter
-        if (month && !date.startsWith(month)) continue;
-
-        // Reset logic (only for this_month)
-        if (resetAt != null && month && scope === "this_month") {
-          // Compare using run_date (YYYY-MM-DD) as local day start.
-          // Convert to ISO-ish timestamp to compare to resetAt.
-          const runTs = Date.parse(`${date}T00:00:00`);
-          if (Number.isFinite(runTs) && runTs < resetAt) continue;
-        }
-
-        // Shoe filter (optional)
-        if (shoeFilterId && shoeId !== shoeFilterId) continue;
-
-        milesByUser.set(userId, (milesByUser.get(userId) ?? 0) + miles);
+      if (resetAt != null && month && scope === "this_month") {
+        const runTs = Date.parse(`${date}T00:00:00`);
+        if (Number.isFinite(runTs) && runTs < resetAt) continue;
       }
+
+      if (shoeFilterId && shoeId !== shoeFilterId) continue;
+
+      milesByUser.set(userId, (milesByUser.get(userId) ?? 0) + miles);
     }
 
     const base = members.map((m) => {
       const id = String(m.id);
-      const total = Math.round(((milesByUser.get(id) ?? 0) as number) * 10) / 10;
-      return { id, full_name: m.full_name, total_miles: total };
+      const total = Math.round((Number(milesByUser.get(id) ?? 0) as number) * 10) / 10;
+      return { id, full_name: String(m.full_name ?? "Member"), total_miles: total };
     });
 
     base.sort((a, b) => b.total_miles - a.total_miles || a.full_name.localeCompare(b.full_name));
@@ -222,7 +217,7 @@ export default function LeaderboardPage() {
   const myRow = useMemo(() => {
     if (!me) return null;
     const id = String(me.id);
-    return rows.find((r: any) => String(r.id) === id) ?? null;
+    return rows.find((r) => String(r.id) === id) ?? null;
   }, [rows, me]);
 
   return (
@@ -231,34 +226,28 @@ export default function LeaderboardPage() {
         title="Leaderboard"
         subtitle="Miles (club only)"
         clubName={clubName ?? undefined}
+        userName={userName}
       />
 
       <div className="px-5 space-y-4">
         <Card className="p-5">
-          {/* Top controls: scope + shoe filter + reset */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">View</div>
               <div className="mt-1 font-semibold">{scopeLabel}</div>
               <div className="mt-1 text-[12px] text-black/55">
-                Club:{" "}
-                <span className="font-medium text-black/70">
-                  {clubName ?? "None selected"}
-                </span>
+                Club: <span className="font-medium text-black/70">{clubName ?? "None selected"}</span>
               </div>
             </div>
 
             {clubId && scope !== "all_time" ? (
               <div className="text-[12px] text-black/55 text-right">
-                <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                  Month
-                </div>
+                <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Month</div>
                 <div className="mt-1 font-semibold">{monthForScope}</div>
               </div>
             ) : null}
           </div>
 
-          {/* Scope buttons */}
           <div className="mt-4 flex gap-2">
             <button
               type="button"
@@ -300,12 +289,9 @@ export default function LeaderboardPage() {
             </button>
           </div>
 
-          {/* Shoe filter */}
           {clubId ? (
             <div className="mt-4">
-              <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                Shoe filter (optional)
-              </div>
+              <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Shoe filter (optional)</div>
               <select
                 className="mt-2 w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 text-[15px] outline-none"
                 value={shoeFilterId}
@@ -318,50 +304,40 @@ export default function LeaderboardPage() {
                   </option>
                 ))}
               </select>
-              <div className="mt-2 text-[12px] text-black/45">
-                Filters miles to runs logged with that shoe.
-              </div>
+              <div className="mt-2 text-[12px] text-black/45">Filters miles to runs logged with that shoe.</div>
             </div>
           ) : null}
 
-          {/* Admin-only reset */}
           {clubId && isAdmin && scope === "this_month" ? (
             <div className="mt-4 rounded-2xl border border-black/10 bg-white/55 px-4 py-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                    Monthly reset
-                  </div>
+                  <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Monthly reset</div>
                   <div className="mt-1 text-[13px] text-black/60">
-                    Resets this monthâ€™s leaderboard totals going forward. This does not delete runs.
+                    Resets this month's leaderboard totals going forward. This does not delete runs.
                   </div>
                   {resetAtISO ? (
                     <div className="mt-2 text-[12px] text-black/45">
                       Reset applied:{" "}
-                      <span className="font-medium text-black/60">
-                        {new Date(resetAtISO).toLocaleString()}
-                      </span>
+                      <span className="font-medium text-black/60">{new Date(resetAtISO).toLocaleString()}</span>
                     </div>
                   ) : null}
                 </div>
 
-                <Button onClick={doResetThisMonth} title="">
-                  Reset
-                </Button>
+                <div className="shrink-0">
+                  <Button onClick={doResetThisMonth}>Reset</Button>
+                </div>
               </div>
             </div>
           ) : null}
 
-          {/* Personal rank highlight */}
           {clubId && myRow ? (
             <div className="mt-4 rounded-2xl border border-black/10 bg-black/5 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                    Your rank
-                  </div>
+                  <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Your rank</div>
                   <div className="mt-1 font-semibold">
-                    #{myRow.rank} Â· {myRow.total_miles.toFixed(1)} miles
+                    #{myRow.rank} {"\u00B7"} {myRow.total_miles.toFixed(1)} miles
                   </div>
                 </div>
                 <div className="text-[12px] text-black/55">You</div>
@@ -369,12 +345,9 @@ export default function LeaderboardPage() {
             </div>
           ) : null}
 
-          {/* Leaderboard list */}
           <div className="mt-4 space-y-2">
             {!clubId ? (
-              <div className="text-[13px] text-black/55">
-                Select a club on the Home page to see the leaderboard.
-              </div>
+              <div className="text-[13px] text-black/55">Select a club on the Home page to see the leaderboard.</div>
             ) : rows.length === 0 ? (
               <div className="text-[13px] text-black/55">No members found for this club yet.</div>
             ) : (
@@ -386,9 +359,7 @@ export default function LeaderboardPage() {
                 const nameCls = first ? "text-amber-600" : "text-black/90";
                 const milesCls = first ? "text-amber-600" : "text-black/90";
 
-                const badgeCls = first
-                  ? "bg-amber-500/15 text-amber-700"
-                  : "bg-black/5 text-black/80";
+                const badgeCls = first ? "bg-amber-500/15 text-amber-700" : "bg-black/5 text-black/80";
 
                 const rowCls = [
                   "flex items-center justify-between rounded-2xl border px-4 py-3",
@@ -409,9 +380,7 @@ export default function LeaderboardPage() {
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className={["font-semibold truncate", nameCls].join(" ")}>
-                            {r.full_name}
-                          </div>
+                          <div className={["font-semibold truncate", nameCls].join(" ")}>{r.full_name}</div>
                           {isMe ? (
                             <span className="shrink-0 rounded-full bg-black/10 px-2 py-[2px] text-[11px] font-semibold text-black/70">
                               You

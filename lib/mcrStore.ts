@@ -14,13 +14,11 @@ export type User = {
 export type Club = {
   id: string;
   name: string;
-  description?: string | null;
-  is_private?: boolean;
   created_at: string;
 };
 
 export type ClubMembership = {
-  id: string; // user_id (local id for seed + members)
+  id: string; // member id (local id for seed + members)
   club_id: string;
   full_name: string;
   email?: string;
@@ -164,13 +162,11 @@ function seedDefaultData() {
     created_at: nowISO(),
   };
 
-const seedIdA = uid();
-const seedIdB = uid();
+  const seedIdA = uid();
+  const seedIdB = uid();
 
-const clubA: Club = { id: seedIdA, name: "Prime Meridian Klub", description: "", is_private: false, created_at: nowISO() };
-const clubB: Club = { id: seedIdB, name: "BMR Miami", description: "", is_private: false, created_at: nowISO() };
-
-
+  const clubA: Club = { id: seedIdA, name: "Prime Meridian Klub", created_at: nowISO() };
+  const clubB: Club = { id: seedIdB, name: "BMR Miami", created_at: nowISO() };
 
   writeJSON(K_ME, me);
   writeJSON(K_PROFILE_EXTRAS, {});
@@ -371,16 +367,115 @@ export const Store = {
   /* ---------- clubs ---------- */
 
   listClubs(): Club[] {
-  const clubs = readJSON<any[]>(K_CLUBS, []);
-  return clubs.map((c) => ({
-    id: String(c?.id ?? ""),
-    name: String(c?.name ?? "").trim(),
-    description: c?.description != null ? String(c.description) : "",
-    is_private: Boolean(c?.is_private),
-    created_at: String(c?.created_at ?? nowISO()),
-  })).filter((c) => c.id && c.name);
-},
+    return readJSON<Club[]>(K_CLUBS, []);
+  },
 
+  createClub(input: any): Club {
+    Store.ensureSeeded();
+
+    const name = String(input?.name ?? "").trim();
+    if (name.length < 2) throw new Error("Club name is required.");
+
+    const clubs = Store.listClubs();
+    const club: Club = {
+      id: uid(),
+      name,
+      created_at: nowISO(),
+    };
+
+    clubs.unshift(club);
+    writeJSON(K_CLUBS, clubs);
+
+    // Make the current user an admin member of the new club
+    const me = Store.getMe();
+    if (me) {
+      const mems = Store.listMemberships();
+      mems.unshift({
+        id: String(me.id),
+        club_id: club.id,
+        full_name: me.full_name,
+        email: me.email,
+        phone: me.phone,
+        is_admin: true,
+        created_at: nowISO(),
+      });
+      writeJSON(K_MEMBERSHIPS, mems);
+    }
+
+    // Set as active club
+    Store.setActiveClubId(club.id);
+
+    return club;
+  },
+
+  deleteClub(clubId: string) {
+    Store.ensureSeeded();
+
+    const cid = String(clubId ?? "");
+    if (!cid) throw new Error("Missing club.");
+
+    // Remove club
+    const clubs = Store.listClubs();
+    const nextClubs = clubs.filter((c) => String(c.id) !== cid);
+    writeJSON(K_CLUBS, nextClubs);
+
+    // Remove memberships for this club
+    const mems = Store.listMemberships();
+    writeJSON(
+      K_MEMBERSHIPS,
+      mems.filter((m) => String(m.club_id) !== cid)
+    );
+
+    // Remove announcements for this club
+    const anns = readJSON<Announcement[]>(K_ANNOUNCEMENTS, []);
+    writeJSON(
+      K_ANNOUNCEMENTS,
+      anns.filter((a: any) => String(a?.club_id ?? "") !== cid)
+    );
+
+    // Remove runs for this club
+    const runs = readJSON<any[]>(K_RUNS, []);
+    writeJSON(
+      K_RUNS,
+      runs.filter((r: any) => String(r?.club_id ?? "") !== cid)
+    );
+
+    // Fix active club
+    const active = Store.getActiveClubId();
+    if (String(active ?? "") === cid) {
+      const fallback = nextClubs[0]?.id ?? null;
+      Store.setActiveClubId(fallback ? String(fallback) : null);
+    }
+
+    return true;
+  },
+
+  leaveClub(clubId: string) {
+    Store.ensureSeeded();
+
+    const me = Store.getMe();
+    if (!me) throw new Error("Not signed in.");
+
+    const cid = String(clubId ?? "");
+    if (!cid) throw new Error("Missing club.");
+
+    const mems = Store.listMemberships();
+    const next = mems.filter(
+      (m) => !(String(m.club_id) === cid && String(m.id) === String(me.id))
+    );
+
+    writeJSON(K_MEMBERSHIPS, next);
+
+    // If they left the active club, pick another club (or null)
+    const active = Store.getActiveClubId();
+    if (String(active ?? "") === cid) {
+      const fallbackClubId =
+        next.find((m) => String(m.id) === String(me.id))?.club_id ?? null;
+      Store.setActiveClubId(fallbackClubId ? String(fallbackClubId) : null);
+    }
+
+    return true;
+  },
 
   getClubName(clubId: string): string | null {
     const cid = String(clubId ?? "");
@@ -406,59 +501,6 @@ export const Store = {
     writeJSON(K_ACTIVE_CLUB, clubId);
     if (isBrowser()) window.dispatchEvent(new Event(ACTIVE_CLUB_CHANGED_EVENT));
   },
-
-  createClub(input: any): Club {
-    return (Store as any).addClub(input);
-  },
-
-  addClub(input: any): Club {
-    Store.ensureSeeded();
-
-    const name = String(input?.name ?? "").trim();
-    const description = input?.description != null ? String(input.description).trim() : "";
-    const is_private = Boolean(input?.is_private);
-
-    if (!name || name.length < 2) throw new Error("Club name is required.");
-
-    const clubs = Store.listClubs();
-
-    // Prevent duplicates by name (case-insensitive)
-    const dup = clubs.find((c) => String(c.name).toLowerCase() === name.toLowerCase());
-    if (dup) throw new Error("A club with that name already exists.");
-
-    const club: Club = {
-      id: uid(),
-      name,
-      description: description || "",
-      is_private,
-      created_at: nowISO(),
-    };
-
-    clubs.unshift(club);
-    writeJSON(K_CLUBS, clubs);
-
-    // Make creator admin member of the new club
-    const me = Store.getMe();
-    if (me) {
-      const memberships = Store.listMemberships();
-      memberships.unshift({
-        id: uid(),
-        club_id: club.id,
-        full_name: me.full_name,
-        email: me.email,
-        phone: me.phone,
-        is_admin: true,
-        created_at: nowISO(),
-      });
-      writeJSON(K_MEMBERSHIPS, memberships);
-    }
-
-    // Switch active club to the newly created club
-    Store.setActiveClubId(club.id);
-
-    return club;
-  },
-
 
   /* ---------- memberships ---------- */
 
@@ -803,31 +845,38 @@ export const Store = {
     return found ?? null;
   },
 
+  // Compatibility alias (prevents UI drift)
+  getAnnouncement(id: string): Announcement | null {
+    return Store.getAnnouncementById(id);
+  },
 
-updateAnnouncementById(
-  id: string,
-  patch: Pick<Announcement, "title" | "body">
-): Announcement {
-  const all = readJSON<Announcement[]>(K_ANNOUNCEMENTS, []);
+  updateAnnouncementById(id: string, patch: Pick<Announcement, "title" | "body">): Announcement {
+    Store.ensureSeeded();
 
-  const idx = all.findIndex((a) => a.id === id);
-  if (idx === -1) {
-    throw new Error("Announcement not found");
-  }
+    const all = readJSON<Announcement[]>(K_ANNOUNCEMENTS, []);
 
-  const next: Announcement = {
-    ...all[idx],
-    ...patch,
-    updated_at: new Date().toISOString(),
-  };
+    const idx = all.findIndex((a) => String(a.id) === String(id));
+    if (idx === -1) {
+      throw new Error("Announcement not found");
+    }
 
-  const updated = [...all];
-  updated[idx] = next;
+    const next: Announcement = {
+      ...all[idx],
+      ...patch,
+      updated_at: nowISO(),
+    };
 
-  writeJSON(K_ANNOUNCEMENTS, updated);
-  return next;
-},
+    const updated = [...all];
+    updated[idx] = next;
 
+    writeJSON(K_ANNOUNCEMENTS, updated);
+    return next;
+  },
+
+  // Compatibility alias (prevents UI drift)
+  updateAnnouncement(id: string, patch: Pick<Announcement, "title" | "body">): Announcement {
+    return Store.updateAnnouncementById(id, patch);
+  },
 
   createAnnouncement(input: any) {
     return (Store as any).addAnnouncement(input);

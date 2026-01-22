@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -35,6 +35,13 @@ export default function ClubsPage() {
     setIsPremium(Store.isPremium());
   }, [mounted]);
 
+  const me = mounted ? Store.getMe() : null;
+
+  const userName = useMemo(() => {
+    if (!mounted) return "Runner";
+    return Store.getMe()?.full_name ?? "Runner";
+  }, [mounted]);
+
   const clubs: Club[] = useMemo(() => {
     if (!mounted) return [];
     return Store.listClubs();
@@ -45,19 +52,16 @@ export default function ClubsPage() {
     return Store.listMemberships();
   }, [mounted, refreshNonce]);
 
-  const me = mounted ? Store.getMe() : null;
-
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(""), 2200);
   }
 
-  function myRole(clubId: string): ClubMembership["role"] | null {
+  function myRole(clubId: string): "admin" | "runner" | null {
     if (!me) return null;
-    const m = memberships.find(
-      (x) => x.club_id === clubId && x.user_id === me.id && x.status === "approved"
-    );
-    return m?.role ?? null;
+    const m = memberships.find((x) => x.club_id === clubId && x.id === me.id);
+    if (!m) return null;
+    return m.is_admin ? "admin" : "runner";
   }
 
   function isMemberApproved(clubId: string) {
@@ -65,8 +69,7 @@ export default function ClubsPage() {
   }
 
   function isAdmin(clubId: string) {
-    const role = myRole(clubId);
-    return role === "owner" || role === "admin";
+    return myRole(clubId) === "admin";
   }
 
   function selectClub(clubId: string) {
@@ -122,7 +125,11 @@ export default function ClubsPage() {
 
   return (
     <div className="pb-28">
-      <GradientHeader title="Clubs" subtitle="Find and manage your running clubs." />
+      <GradientHeader
+        title="Clubs"
+        subtitle="Find and manage your running clubs."
+        userName={userName}
+      />
 
       <div className="px-5 mt-2 space-y-4">
         {toast ? (
@@ -137,9 +144,7 @@ export default function ClubsPage() {
               <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
                 Clubs
               </div>
-              <div className="mt-1 text-[16px] font-semibold">
-                Your directory
-              </div>
+              <div className="mt-1 text-[16px] font-semibold">Your directory</div>
               <div className="mt-1 text-[13px] text-black/55">
                 Select a club to set it as your active club.
               </div>
@@ -162,7 +167,7 @@ export default function ClubsPage() {
                   <div>
                     <div className="text-[16px] font-semibold">{c.name}</div>
                     <div className="mt-2 text-[12px] text-black/45">
-                      Role: {myRole(c.id) ?? "â€”"}
+                      Role: {myRole(c.id) ?? "—"}
                     </div>
                   </div>
 
@@ -196,7 +201,7 @@ export default function ClubsPage() {
         </div>
       </div>
 
-      {/* Confirmation modal â€“ positioned higher */}
+      {/* Confirmation modal – positioned higher */}
       {confirm && (
         <div className="fixed inset-0 z-50">
           <button
@@ -225,8 +230,9 @@ export default function ClubsPage() {
                   <button
                     onClick={closeConfirm}
                     className="h-10 w-10 rounded-2xl bg-black/5 flex items-center justify-center"
+                    aria-label="Close"
                   >
-                    Ã—
+                    ×
                   </button>
                 </div>
 

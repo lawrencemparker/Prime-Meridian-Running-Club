@@ -1,4 +1,5 @@
-﻿"use client";
+﻿// app/home/page.tsx
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -12,10 +13,9 @@ import { WeatherPill } from "@/components/WeatherPill";
 import { ShoeTrackerCard, Shoe } from "@/components/home/ShoeTrackerCard";
 import { AnnouncementsPreview, Announcement } from "@/components/home/AnnouncementsPreview";
 
-import { Store } from "@/lib/mcrStore";
+import { Store, ACTIVE_CLUB_CHANGED_EVENT } from "@/lib/mcrStore";
 
 const FLASH_TOAST_KEY = "mcr_flash_toast";
-const ACTIVE_CLUB_CHANGED_EVENT = "mcr_active_club_changed";
 
 function monthKeyYYYYMM(d = new Date()) {
   const y = d.getFullYear();
@@ -28,14 +28,15 @@ function prettyDate(iso: string) {
     const dt = new Date(iso);
     return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   } catch {
-    return "â€”";
+    return "—";
   }
 }
 
+// Use Unicode escapes to avoid encoding/emoji mojibake issues.
 function medalFor(rank: number) {
-  if (rank === 1) return "ðŸ¥‡";
-  if (rank === 2) return "ðŸ¥ˆ";
-  if (rank === 3) return "ðŸ¥‰";
+  if (rank === 1) return "\u{1F947}"; // 🥇
+  if (rank === 2) return "\u{1F948}"; // 🥈
+  if (rank === 3) return "\u{1F949}"; // 🥉
   return null;
 }
 
@@ -68,7 +69,7 @@ export default function HomePage() {
   // Seed once on mount (SSR-safe)
   useEffect(() => {
     if (!mounted) return;
-    Store.ensureSeeded?.();
+    Store.ensureSeeded();
   }, [mounted]);
 
   // Selected club (local state, but persisted in Store)
@@ -151,7 +152,9 @@ export default function HomePage() {
 
     const month = monthKeyYYYYMM();
     const memberList: any[] =
-      typeof Store.listMembers === "function" ? ((Store.listMembers(selectedClubId) as any[]) ?? []) : [];
+      typeof Store.listMembers === "function"
+        ? ((Store.listMembers(selectedClubId) as any[]) ?? [])
+        : [];
 
     const milesByUser = new Map<string, number>();
 
@@ -190,11 +193,10 @@ export default function HomePage() {
     if (!mounted) return;
     setSelectedClubId(nextId);
     Store.setActiveClubId(nextId ? nextId : null);
-    // ensure any derived metrics update immediately
     setRefreshNonce((n) => n + 1);
   }
 
-  // âœ… Month summary: GRAND TOTAL across ALL clubs for current runner (this month)
+  // Month summary: grand total across ALL clubs for current runner (this month)
   const monthMiles = useMemo(() => {
     if (!mounted || !me) return 0.0;
     const month = monthKeyYYYYMM();
@@ -228,7 +230,7 @@ export default function HomePage() {
     <div className="pb-28">
       <GradientHeader
         title="Good morning"
-        subtitle="Letâ€™s make progress today."
+        subtitle="Let's make progress today."
         userName={me?.full_name ?? ""}
         clubName={clubName ?? undefined}
       />
@@ -245,9 +247,7 @@ export default function HomePage() {
         {/* Month summary */}
         <Card className="p-5">
           <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">This month</div>
-          <div className="mt-2 text-[30px] font-semibold tracking-[-0.02em]">
-            {monthMiles.toFixed(1)} miles
-          </div>
+          <div className="mt-2 text-[30px] font-semibold tracking-[-0.02em]">{monthMiles.toFixed(1)} miles</div>
           <div className="mt-4">
             <Button onClick={() => router.push("/log")}>Log a Run</Button>
           </div>
@@ -273,7 +273,7 @@ export default function HomePage() {
 
             <div className="shrink-0">
               <div className="h-11 w-11 rounded-2xl bg-white/70 border border-black/5 shadow-[0_10px_22px_rgba(15,23,42,0.10)] flex items-center justify-center">
-                <span className="text-[18px]">ðŸ</span>
+                <span className="text-[18px]">{"\u{1F3C1}"}</span>
               </div>
             </div>
           </div>
@@ -358,9 +358,7 @@ export default function HomePage() {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Leaderboard</div>
-                  <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em] truncate">
-                    {clubName} Leaderboard
-                  </div>
+                  <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em] truncate">{clubName} Leaderboard</div>
                   <div className="mt-1 text-[13px] text-black/55">This month</div>
                 </div>
 
@@ -399,9 +397,7 @@ export default function HomePage() {
                           </div>
                         </div>
 
-                        <div className={["font-semibold tabular-nums", textCls].join(" ")}>
-                          {r.total_miles.toFixed(1)}
-                        </div>
+                        <div className={["font-semibold tabular-nums", textCls].join(" ")}>{r.total_miles.toFixed(1)}</div>
                       </div>
                     );
                   })

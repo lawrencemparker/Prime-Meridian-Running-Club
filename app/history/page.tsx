@@ -1,615 +1,562 @@
-﻿"use client";
+﻿// app/history/page.tsx
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { GradientHeader } from "@/components/GradientHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { TabBar } from "@/components/TabBar";
-import { Store } from "@/lib/mcrStore";
 
-const FLASH_TOAST_KEY = "mcr_flash_toast";
+import { Store, type Run, type Shoe } from "@/lib/mcrStore";
 
-type RunRow = {
-  id: string;
-  user_id: string;
-  club_id: string;
-  run_date: string; // YYYY-MM-DD
-  miles: number;
-  run_type: string;
-  race_name?: string | null;
-  notes?: string | null;
-  shoe_id?: string | null;
-};
-
-function monthKeyYYYYMM(d = new Date()) {
+function todayYYYYMMDD() {
+  const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
-function fmtDate(isoYYYYMMDD: string) {
+function fmtDateLabel(yyyyMmDd: string) {
   try {
-    const dt = new Date(`${isoYYYYMMDD}T00:00:00`);
-    return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const [y, m, d] = yyyyMmDd.split("-").map((x) => Number(x));
+    const dt = new Date(y, (m || 1) - 1, d || 1);
+    return dt.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   } catch {
-    return isoYYYYMMDD;
+    return yyyyMmDd;
   }
-}
-
-function fmtType(run_type: string, race_name?: string | null) {
-  const t = (run_type || "").toLowerCase();
-  if (t === "race") return race_name?.trim() ? `Race Â· ${race_name.trim()}` : "Race";
-  if (t === "training") return "Training";
-  if (t === "other") return "Other";
-  return run_type || "Run";
 }
 
 function round1(n: number) {
   return Math.round(n * 10) / 10;
 }
 
-function setFlashToast(msg: string) {
-  try {
-    window.localStorage.setItem(FLASH_TOAST_KEY, msg);
-  } catch {
-    // ignore
-  }
-}
+type Toast = { msg: string; kind?: "ok" | "err" };
+
+type EditMode = "add" | "edit";
 
 export default function HistoryPage() {
   const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+
+  const [toast, setToast] = useState<Toast | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
+  // list refresh nonce
+  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  // runs
+  const runs: Run[] = useMemo(() => {
+    if (!mounted) return [];
+    return Store.listRuns();
+  }, [mounted, refreshNonce]);
+
+  // shoes (for displaying + edit form)
+  const shoes: Shoe[] = useMemo(() => {
+    if (!mounted) return [];
+    return Store.listShoes();
+  }, [mounted, refreshNonce]);
+
+  const userName = useMemo(() => {
+    if (!mounted) return "Runner";
+    return Store.getMe()?.full_name ?? "Runner";
+  }, [mounted]);
+
+  const clubId = useMemo(() => {
+    if (!mounted) return null;
+    return Store.getActiveClubId() ?? Store.getMyApprovedClubId();
+  }, [mounted]);
+
+  const clubName = useMemo(() => {
+    if (!mounted || !clubId) return null;
+    return Store.getClubName(clubId);
+  }, [mounted, clubId]);
+
+  // filter state
+  const [fType, setFType] = useState<string>("all");
+
+  // modal state
+  const [openModal, setOpenModal] = useState(false);
+  const [mode, setMode] = useState<EditMode>("add");
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // form fields
+  const [fDate, setFDate] = useState(todayYYYYMMDD());
+  const [fMiles, setFMiles] = useState("");
+  const [fRaceName, setFRaceName] = useState("");
+  const [fNotes, setFNotes] = useState("");
+  const [fShoeId, setFShoeId] = useState<string>("");
+
+  const [showNotes, setShowNotes] = useState(false);
+
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => {
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!mounted) return;
     Store.ensureSeeded?.();
   }, [mounted]);
 
-  const [scope, setScope] = useState<"month" | "all">("month");
-  const [refreshNonce, setRefreshNonce] = useState(0);
+  function bump() {
+    setRefreshNonce((n) => n + 1);
+  }
 
-  useEffect(() => {
-    if (!mounted) return;
-    const onFocus = () => setRefreshNonce((n) => n + 1);
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [mounted]);
+  function showToast(msg: string, kind: "ok" | "err" = "ok") {
+    setToast({ msg, kind });
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 2400);
+  }
 
-  
-  const clubs = useMemo(() => {
-    if (!mounted) return [] as any[];
-    return typeof Store.listClubs === "function" ? (Store.listClubs() as any[]) : [];
-  }, [mounted, refreshNonce]);
+  const filteredRuns = useMemo(() => {
+    const all = runs.slice();
 
-  const clubNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const c of clubs) {
-      if (c?.id) map.set(String(c.id), String(c.name ?? "Club"));
-    }
-    return map;
-  }, [clubs]);
+    // only show runs for selected/approved club if we have a clubId
+    const clubScoped = clubId ? all.filter((r) => String(r.club_id) === String(clubId)) : all;
 
-const me = useMemo(() => (mounted ? Store.getMe() : null), [mounted]);
+    if (fType === "all") return clubScoped;
 
-  const shoes = useMemo(() => {
-    if (!mounted) return [] as any[];
-    return typeof Store.listShoes === "function" ? (Store.listShoes() as any[]) : [];
-  }, [mounted, refreshNonce]);
-
-  const shoeNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of shoes) {
-      if (s?.id) map.set(String(s.id), String(s.name ?? "Shoe"));
-    }
-    return map;
-  }, [shoes]);
-
-  const runs = useMemo(() => {
-    if (!mounted || !me) return [] as RunRow[];
-    if (typeof Store.listRuns !== "function") return [] as RunRow[];
-
-    const raw = (Store.listRuns() ?? []) as any[];
-    const mine = raw.filter((r) => String(r.user_id) === String(me.id));
-
-    const month = monthKeyYYYYMM();
-    const filtered =
-      scope === "month"
-        ? mine.filter((r) => String(r.run_date ?? "").startsWith(month))
-        : mine;
-
-    filtered.sort((a, b) => {
-      const da = String(a.run_date ?? "");
-      const db = String(b.run_date ?? "");
-      if (da !== db) return db.localeCompare(da);
-      return String(b.id ?? "").localeCompare(String(a.id ?? "")); // stable-ish
-    });
-
-    return filtered.map((r) => ({
-      id: String(r.id),
-      user_id: String(r.user_id),
-      club_id: String((r as any).club_id ?? ""),
-      run_date: String(r.run_date),
-      miles: Number(r.miles ?? 0),
-      run_type: String(r.run_type ?? "training"),
-      race_name: r.race_name ?? null,
-      notes: r.notes ?? null,
-      shoe_id: r.shoe_id ?? null,
-    }));
-  }, [mounted, me, scope, refreshNonce]);
+    return clubScoped.filter((r) => String(r.type ?? "") === fType);
+  }, [runs, fType, clubId]);
 
   const totalMiles = useMemo(() => {
-    let sum = 0;
-    for (const r of runs) {
-      const n = Number(r.miles);
-      if (Number.isFinite(n)) sum += n;
-    }
-    return round1(sum);
-  }, [runs]);
+    return round1(filteredRuns.reduce((sum, r) => sum + Number(r.miles ?? 0), 0));
+  }, [filteredRuns]);
 
-  // ----- Edit/Delete modal state -----
-  const [activeRun, setActiveRun] = useState<RunRow | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>("");
+  function resetForm() {
+    setFDate(todayYYYYMMDD());
+    setFMiles("");
+    setFType("training");
+    setFRaceName("");
+    setFNotes("");
+    setFShoeId("");
+    setShowNotes(false);
 
-  // Compact form fields
-  const [fDate, setFDate] = useState("");
-  const [fMiles, setFMiles] = useState("");
-  const [fType, setFType] = useState<"training" | "race" | "other">("training");
-  const [fRaceName, setFRaceName] = useState("");
-  const [fNotes, setFNotes] = useState("");
-  const [fShoeId, setFShoeId] = useState<string>("");
-  const [showNotes, setShowNotes] = useState(false);
+    setSaving(false);
+    setDeleting(false);
 
-  // Prevent background scroll while modal open
-  useEffect(() => {
-    if (!activeRun) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [activeRun]);
+    setEditingId(null);
+    setMode("add");
+  }
 
-  function openEdit(r: RunRow) {
-    setError("");
-    setConfirmDelete(false);
-    setActiveRun(r);
+  function openAdd() {
+    resetForm();
+    setMode("add");
+    setOpenModal(true);
+  }
 
-    setFDate(r.run_date);
+  function openEdit(r: Run) {
+    setMode("edit");
+    setEditingId(r.id);
+
+    setFDate(String(r.run_date ?? todayYYYYMMDD()));
     setFMiles(String(r.miles ?? ""));
-    setFType((r.run_type as any) || "training");
+    setFType(String(r.type ?? "training"));
+
     setFRaceName(String(r.race_name ?? ""));
     setFNotes(String(r.notes ?? ""));
-    setFShoeId(r.shoe_id ?? "");
+    setShowNotes(Boolean(r.notes && String(r.notes).trim().length > 0));
 
-    // Notes are optional: default collapsed unless there are existing notes
-    setShowNotes(Boolean((r.notes ?? "").trim()));
+    setFShoeId(String(r.shoe_id ?? ""));
+
+    setSaving(false);
+    setDeleting(false);
+
+    setOpenModal(true);
   }
 
-  function closeEdit() {
-    if (busy) return;
-    setActiveRun(null);
-    setConfirmDelete(false);
-    setError("");
+  function closeModal() {
+    setOpenModal(false);
+    resetForm();
   }
 
-  
-  const activeRunClubName = useMemo(() => {
-    if (!mounted || !activeRun) return "â€”";
-    const id = String(activeRun.club_id ?? "");
-    if (!id) return "â€”";
-    return Store.getClubName?.(id) ?? id;
-  }, [mounted, activeRun]);
+  function milesNumberOrNaN(v: string) {
+    const n = Number(String(v).trim());
+    return Number.isFinite(n) ? n : NaN;
+  }
 
-const milesNum = useMemo(() => {
-    const n = Number(fMiles);
-    if (!Number.isFinite(n)) return NaN;
-    return round1(n);
-  }, [fMiles]);
+  async function onSave() {
+    if (!mounted) return;
 
-  const canSave =
-    !!activeRun &&
-    fDate.length === 10 &&
-    Number.isFinite(milesNum) &&
-    milesNum > 0 &&
-    (fType !== "race" || fRaceName.trim().length > 0);
+    if (!clubId) {
+      showToast("Select a club first.", "err");
+      router.push("/clubs");
+      return;
+    }
 
-  async function saveEdit() {
-    if (!activeRun || !canSave) return;
-    setBusy(true);
-    setError("");
+    const milesNum = milesNumberOrNaN(fMiles);
+    if (!Number.isFinite(milesNum) || milesNum <= 0) {
+      showToast("Miles must be greater than 0.", "err");
+      return;
+    }
+
+    const runDate = String(fDate ?? "").trim();
+    if (!runDate) {
+      showToast("Date is required.", "err");
+      return;
+    }
+
+    const type = String(fType ?? "training").trim() || "training";
+
+    // IMPORTANT: never pass null to fields typed as string | undefined
+    const race_name = type === "race" ? (fRaceName.trim() || undefined) : undefined;
+    const notes = showNotes ? (fNotes.trim() || undefined) : undefined;
+    const shoe_id = fShoeId ? String(fShoeId) : undefined;
 
     try {
-      Store.updateRun(activeRun.id, {
-        run_date: fDate,
+      setSaving(true);
+
+      if (mode === "add") {
+        const me = Store.getMe();
+        const userId = String(me?.id ?? "local-user");
+
+        Store.addRun({
+          user_id: userId,
+          club_id: String(clubId),
+          run_date: runDate,
+          miles: milesNum,
+          type,
+          race_name,
+          notes,
+          shoe_id,
+        });
+
+        bump();
+        closeModal();
+        showToast("Run added", "ok");
+        return;
+      }
+
+      if (!editingId) {
+        setSaving(false);
+        showToast("Missing run id.", "err");
+        return;
+      }
+
+      Store.updateRun(editingId, {
+        run_date: runDate,
         miles: milesNum,
-        run_type: fType,
-        race_name: fType === "race" ? fRaceName.trim() : null,
-        notes: showNotes && fNotes.trim() ? fNotes.trim() : null,
-        shoe_id: fShoeId ? fShoeId : null,
+        type,
+        race_name,
+        notes,
+        shoe_id,
       });
 
-      setFlashToast("Run updated.");
-      setRefreshNonce((n) => n + 1);
-      setActiveRun(null);
-      setConfirmDelete(false);
+      bump();
+      closeModal();
+      showToast("Changes saved", "ok");
     } catch (e: any) {
-      setError(e?.message ? String(e.message) : "Unable to update run.");
-    } finally {
-      setBusy(false);
+      setSaving(false);
+      showToast(String(e?.message ?? "Unable to save."), "err");
     }
   }
 
-  async function doDelete() {
-    if (!activeRun) return;
-    setBusy(true);
-    setError("");
+  async function onDelete() {
+    if (!editingId) return;
+    const ok = window.confirm("Delete this run? This cannot be undone.");
+    if (!ok) return;
 
     try {
-      Store.deleteRun(activeRun.id);
-      setFlashToast("Run deleted.");
-      setRefreshNonce((n) => n + 1);
-      setActiveRun(null);
-      setConfirmDelete(false);
+      setDeleting(true);
+      Store.deleteRun(editingId);
+      bump();
+      closeModal();
+      showToast("Run deleted", "ok");
     } catch (e: any) {
-      setError(e?.message ? String(e.message) : "Unable to delete run.");
-    } finally {
-      setBusy(false);
+      setDeleting(false);
+      showToast(String(e?.message ?? "Unable to delete."), "err");
     }
   }
 
-  // Compact control styles
-  const labelCls = "text-[11px] text-black/45 tracking-[0.14em] uppercase";
-  const inputCls =
-    "mt-2 w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-2.5 text-[15px] outline-none";
-  const hintCls = "mt-2 text-[12px] text-black/45";
+  if (!mounted) return null;
 
   return (
     <div className="pb-28">
-      <GradientHeader title="History" subtitle="Your logged runs" />
+      <GradientHeader
+        title="History"
+        subtitle="Your logged runs"
+        userName={userName}
+        clubName={clubName ?? undefined}
+        rightSlot={
+          <Button className="h-9 px-4 rounded-full text-[13px] font-semibold" onClick={openAdd}>
+            Add
+          </Button>
+        }
+      />
 
-      <div className="px-5 mt-2 space-y-4">
+      <div className="px-5 mt-3 space-y-3">
+        {toast ? (
+          <div
+            className={[
+              "rounded-2xl border px-4 py-3 text-[13px] font-semibold",
+              toast.kind === "err"
+                ? "border-red-500/25 bg-red-500/10 text-red-800"
+                : "border-emerald-500/25 bg-emerald-500/10 text-emerald-800",
+            ].join(" ")}
+          >
+            {toast.msg}
+          </div>
+        ) : null}
+
         <Card className="p-5">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
                 Summary
               </div>
-              <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em]">
-                {scope === "month" ? "This month" : "All time"} Â· {totalMiles.toFixed(1)} miles
-              </div>
+              <div className="mt-1 text-[16px] font-semibold">Total: {totalMiles} mi</div>
               <div className="mt-1 text-[13px] text-black/55">
-                Tap a run to edit details or delete an entry.
+                Tap a run to edit.
               </div>
             </div>
 
-            <Button onClick={() => router.push("/log")}>Log</Button>
-          </div>
-
-          <div className="mt-4 flex gap-2">
-            <button
-              onClick={() => setScope("month")}
-              className={[
-                "flex-1 rounded-2xl border px-4 py-3 text-[14px] font-semibold transition",
-                scope === "month"
-                  ? "border-black/10 bg-black/5 text-black"
-                  : "border-black/10 bg-white/70 text-black/70 hover:bg-white",
-              ].join(" ")}
-            >
-              This Month
-            </button>
-
-            <button
-              onClick={() => setScope("all")}
-              className={[
-                "flex-1 rounded-2xl border px-4 py-3 text-[14px] font-semibold transition",
-                scope === "all"
-                  ? "border-black/10 bg-black/5 text-black"
-                  : "border-black/10 bg-white/70 text-black/70 hover:bg-white",
-              ].join(" ")}
-            >
-              All Time
-            </button>
+            <div className="flex items-center gap-2">
+              <select
+                value={fType}
+                onChange={(e) => setFType(e.target.value)}
+                className="h-9 rounded-xl border border-black/10 bg-white px-3 text-[13px] font-semibold outline-none"
+              >
+                <option value="all">All</option>
+                <option value="training">Training</option>
+                <option value="race">Race</option>
+                <option value="easy">Easy</option>
+                <option value="tempo">Tempo</option>
+                <option value="intervals">Intervals</option>
+                <option value="long">Long</option>
+              </select>
+            </div>
           </div>
         </Card>
 
-        {runs.length === 0 ? (
+        {filteredRuns.length === 0 ? (
           <Card className="p-5">
-            <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">No runs yet</div>
-            <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em]">
-              Start logging your training
+            <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
+              No runs yet
             </div>
-            <p className="mt-1 text-[13px] text-black/55">
-              Log your first run to build your history and keep shoe mileage accurate.
-            </p>
+            <div className="mt-2 text-[14px] text-black/60">
+              Log a run to build your history and show progress over time.
+            </div>
             <div className="mt-4">
-              <Button onClick={() => router.push("/log")}>Log a Run</Button>
+              <Button onClick={openAdd}>Log your first run</Button>
             </div>
           </Card>
         ) : (
-          <Card className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Runs</div>
-                <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em]">
-                  {runs.length} {runs.length === 1 ? "entry" : "entries"}
-                </div>
-              </div>
-
-              <button
-                onClick={() => setRefreshNonce((n) => n + 1)}
-                className="text-[12px] text-black/55 hover:text-black/70"
-                type="button"
+          <div className="space-y-3">
+            {filteredRuns.map((r) => (
+              <div
+                key={r.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openEdit(r)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") openEdit(r);
+                }}
+                className="cursor-pointer select-none active:scale-[0.995] transition-transform"
               >
-                Refresh
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-2">
-              {runs.map((r) => {
-                const shoeLabel = r.shoe_id
-                  ? shoeNameById.get(String(r.shoe_id)) ?? "Shoe"
-                  : null;
-
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => openEdit(r)}
-                    className="w-full text-left rounded-2xl bg-white/55 border border-black/5 px-4 py-3 hover:bg-white/70 active:bg-white/80 transition"
-                    type="button"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-semibold tracking-[-0.01em]">
-                          {fmtDate(r.run_date)} Â· {Number(r.miles).toFixed(1)} mi
-                        </div>
-                        <div className="mt-1 text-[13px] text-black/60">
-                          {fmtType(r.run_type, r.race_name)}
-                          {shoeLabel ? (
-                            <>
-                              {" "}
-                              Â· <span className="text-black/70">{shoeLabel}</span>
-                            </>
-                          ) : null}
-                        </div>
-                        {r.notes ? (
-                          <div className="mt-2 text-[13px] text-black/55 line-clamp-2">
-                            {r.notes}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="shrink-0 text-[12px] text-black/45">{r.shoe_id ? "ðŸ‘Ÿ" : ""}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </Card>
-        )}
-      </div>
-
-      {/* Edit Modal (compact, higher, no scrollbars) */}
-      {activeRun ? (
-        <div className="fixed inset-0 z-50">
-          <button
-            aria-label="Close"
-            onClick={closeEdit}
-            className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
-          />
-
-          <div className="absolute inset-x-0 top-[40px]">
-            <div className="mx-auto max-w-[560px] px-4">
-              <Card className="rounded-[28px] shadow-[0_30px_90px_rgba(15,23,42,0.25)]">
-                <div className="p-5">
+                <Card className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-[11px] text-black/45 tracking-[0.18em] uppercase">
-                        Edit run
+                      <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
+                        {fmtDateLabel(r.run_date)}
                       </div>
-                      <div className="mt-1 text-[18px] font-semibold tracking-[-0.01em]">
-                        {fmtDate(activeRun.run_date)} Â· {Number(activeRun.miles).toFixed(1)} mi
+                      <div className="mt-1 text-[16px] font-semibold">
+                        {round1(Number(r.miles ?? 0))} mi
+                        <span className="ml-2 text-[12px] font-semibold text-black/50">
+                          {String(r.type ?? "training")}
+                        </span>
                       </div>
-                      <div className="mt-1 text-[13px] text-black/55">
-                        Shoe mileage updates automatically.
-                      </div>
-                      <div className="mt-1 text-[13px] text-black/55">
-                        Club: <span className="font-medium text-black/70">{clubNameById.get(String(activeRun.club_id)) ?? "â€”"}</span>
-                      </div>
-                    </div>
 
-                    <button
-                      onClick={closeEdit}
-                      className="h-10 w-10 rounded-2xl bg-black/5 hover:bg-black/10 active:bg-black/15 transition flex items-center justify-center"
-                      aria-label="Close"
-                      disabled={busy}
-                    >
-                      <span className="text-[18px] leading-none">Ã—</span>
-                    </button>
-                  </div>
+                      {r.race_name ? (
+                        <div className="mt-1 text-[13px] text-black/60">
+                          Race: {r.race_name}
+                        </div>
+                      ) : null}
 
-                  {/* Compact grid */}
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelCls}>Date</label>
-                      <input
-                        type="date"
-                        value={fDate}
-                        onChange={(e) => setFDate(e.target.value)}
-                        className={inputCls}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={labelCls}>Miles</label>
-                      <input
-                        value={fMiles}
-                        onChange={(e) => setFMiles(e.target.value)}
-                        inputMode="decimal"
-                        className={inputCls}
-                      />
-                      {fMiles && (!Number.isFinite(milesNum) || milesNum <= 0) ? (
-                        <div className="mt-2 text-[12px] text-red-600">Enter a valid miles value.</div>
+                      {r.notes ? (
+                        <div className="mt-2 text-[13px] text-black/55 line-clamp-2">
+                          {r.notes}
+                        </div>
                       ) : null}
                     </div>
 
-                    <div>
-                      <label className={labelCls}>Type</label>
-                      <select
-                        value={fType}
-                        onChange={(e) => setFType(e.target.value as any)}
-                        className={inputCls}
-                      >
-                        <option value="training">Training</option>
-                        <option value="race">Race</option>
-                        <option value="other">Other</option>
-                      </select>
+                    <div className="shrink-0 text-right">
+                      {r.shoe_id ? (
+                        <div className="text-[12px] text-black/45">
+                          Shoe: {shoes.find((s) => s.id === r.shoe_id)?.name ?? "—"}
+                        </div>
+                      ) : (
+                        <div className="text-[12px] text-black/35">No shoe</div>
+                      )}
+                      <div className="mt-2 text-[12px] text-black/35">Edit</div>
                     </div>
+                  </div>
+                </Card>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-                    <div>
-                      <label className={labelCls}>Shoe (optional)</label>
-                      <select
-                        value={fShoeId}
-                        onChange={(e) => {
-                          const nextId = e.target.value;
+      <TabBar />
 
-                          // Allow clearing
-                          if (!nextId) {
-                            setFShoeId("");
-                            return;
-                          }
+      {/* Add/Edit Modal */}
+      {openModal ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-6">
+          <div className="absolute inset-0 bg-black/30" onClick={closeModal} />
 
-                          const prevId = fShoeId; // current selection in state
-                          const attachedId = activeRun?.shoe_id ? String(activeRun.shoe_id) : "";
+          <div className="relative w-full max-w-[480px] rounded-[28px] bg-white shadow-[0_30px_80px_rgba(0,0,0,0.18)] border border-black/10 overflow-hidden">
+            <div className="p-5">
+              <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
+                {mode === "add" ? "New run" : "Edit run"}
+              </div>
 
-                          const picked = (shoes as any[]).find(
-                            (s) => String(s.id) === String(nextId)
-                          );
+              <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em]">
+                {mode === "add" ? "Log miles" : "Update entry"}
+              </div>
 
-                          // Treat anything not explicitly true as retired/inactive
-                          const isRetired = picked ? picked.active !== true : false;
-
-                          // Block newly selecting retired shoes (but allow if already attached to this run)
-                          if (isRetired && String(nextId) !== attachedId) {
-                            setFShoeId(prevId || "");
-                            return;
-                          }
-
-                          setFShoeId(nextId);
-                        }}
-                        className={inputCls}
-                      >
-                        <option value="">No shoe selected</option>
-                        {shoes.map((s: any) => {
-                          const id = String(s.id);
-                          const retired = s.active !== true; // consistent with guard above
-                          const isSelected = id === (activeRun.shoe_id ?? "");
-                          const label = `${s.name}${retired ? " (retired)" : ""}`;
-
-                          return (
-                            <option key={id} value={id} disabled={retired && !isSelected}>
-                              {label}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <div className={hintCls}>Retired shoes cannot be newly selected.</div>
+              <div className="mt-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
+                      Date
                     </div>
-
-                    {fType === "race" ? (
-                      <div className="md:col-span-2">
-                        <label className={labelCls}>Race name</label>
-                        <input
-                          value={fRaceName}
-                          onChange={(e) => setFRaceName(e.target.value)}
-                          className={inputCls}
-                        />
-                      </div>
-                    ) : null}
+                    <input
+                      value={fDate}
+                      onChange={(e) => setFDate(e.target.value)}
+                      type="date"
+                      className="mt-2 w-full h-11 rounded-2xl border border-black/10 bg-white px-4 text-[14px] outline-none focus:border-black/25"
+                    />
                   </div>
 
-                  {/* Notes collapsed by default */}
-                  <div className="mt-3">
+                  <div>
+                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
+                      Miles
+                    </div>
+                    <input
+                      value={fMiles}
+                      onChange={(e) => setFMiles(e.target.value)}
+                      inputMode="decimal"
+                      placeholder="3.1"
+                      className="mt-2 w-full h-11 rounded-2xl border border-black/10 bg-white px-4 text-[14px] outline-none focus:border-black/25"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
+                    Type
+                  </div>
+                  <select
+                    value={fType}
+                    onChange={(e) => setFType(e.target.value)}
+                    className="mt-2 w-full h-11 rounded-2xl border border-black/10 bg-white px-4 text-[14px] outline-none focus:border-black/25"
+                  >
+                    <option value="training">Training</option>
+                    <option value="race">Race</option>
+                    <option value="easy">Easy</option>
+                    <option value="tempo">Tempo</option>
+                    <option value="intervals">Intervals</option>
+                    <option value="long">Long</option>
+                  </select>
+                </div>
+
+                {String(fType) === "race" ? (
+                  <div>
+                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
+                      Race name
+                    </div>
+                    <input
+                      value={fRaceName}
+                      onChange={(e) => setFRaceName(e.target.value)}
+                      placeholder="e.g., Miami Half Marathon"
+                      className="mt-2 w-full h-11 rounded-2xl border border-black/10 bg-white px-4 text-[14px] outline-none focus:border-black/25"
+                    />
+                  </div>
+                ) : null}
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
+                      Notes
+                    </div>
                     <button
                       type="button"
                       onClick={() => setShowNotes((v) => !v)}
-                      className="text-[12px] text-black/55 hover:text-black/70"
-                      disabled={busy}
+                      className="text-[12px] font-semibold text-black/60"
                     >
-                      {showNotes ? "Hide notes" : "Add notes (optional)"}
+                      {showNotes ? "Hide" : "Add"}
                     </button>
-
-                    {showNotes ? (
-                      <textarea
-                        value={fNotes}
-                        onChange={(e) => setFNotes(e.target.value)}
-                        rows={2}
-                        className="mt-2 w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-2.5 text-[15px] outline-none resize-none"
-                      />
-                    ) : null}
                   </div>
 
-                  {error ? (
-                    <div className="mt-3 rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-[13px] text-red-700">
-                      {error}
-                    </div>
+                  {showNotes ? (
+                    <textarea
+                      value={fNotes}
+                      onChange={(e) => setFNotes(e.target.value)}
+                      placeholder="How did it feel? Pace? Route? Weather?"
+                      rows={3}
+                      className="mt-2 w-full rounded-2xl border border-black/10 bg-white px-4 py-3 text-[14px] outline-none focus:border-black/25 resize-none"
+                    />
                   ) : null}
-
-                  {confirmDelete ? (
-                    <div className="mt-3 rounded-2xl border border-red-500/25 bg-red-500/10 px-4 py-3">
-                      <div className="text-[13px] font-semibold text-red-700">Delete this run?</div>
-                      <div className="mt-1 text-[13px] text-red-700/90">
-                        This removes the run and adjusts shoe mileage if a shoe was selected.
-                      </div>
-                      <div className="mt-3 flex gap-2">
-                        <Button
-                          variant="secondary"
-                          onClick={() => setConfirmDelete(false)}
-                          disabled={busy}
-                        >
-                          Keep
-                        </Button>
-                        <Button onClick={doDelete} disabled={busy}>
-                          {busy ? "Deleting..." : "Delete"}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <button
-                      onClick={() => setConfirmDelete(true)}
-                      className="text-[12px] text-red-600 hover:text-red-700"
-                      type="button"
-                      disabled={busy}
-                    >
-                      Delete run
-                    </button>
-
-                    <div className="flex gap-2">
-                      <Button variant="secondary" onClick={closeEdit} disabled={busy}>
-                        Cancel
-                      </Button>
-                      <Button onClick={saveEdit} disabled={!canSave || busy}>
-                        {busy ? "Saving..." : "Save"}
-                      </Button>
-                    </div>
-                  </div>
                 </div>
-              </Card>
 
-              <div className="h-10" />
+                <div>
+                  <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
+                    Shoe (optional)
+                  </div>
+                  <select
+                    value={fShoeId}
+                    onChange={(e) => setFShoeId(e.target.value)}
+                    className="mt-2 w-full h-11 rounded-2xl border border-black/10 bg-white px-4 text-[14px] outline-none focus:border-black/25"
+                  >
+                    <option value="">No shoe</option>
+                    {shoes.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({round1(s.miles)} mi)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-5 flex gap-3">
+                <Button variant="secondary" className="flex-1" onClick={closeModal} disabled={saving || deleting}>
+                  Cancel
+                </Button>
+
+                <Button className="flex-1" onClick={onSave} disabled={saving || deleting}>
+                  {saving ? "Saving..." : mode === "add" ? "Add" : "Save"}
+                </Button>
+              </div>
+
+              {mode === "edit" ? (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    disabled={saving || deleting}
+                    className="w-full text-[13px] font-semibold text-red-600 py-2 rounded-2xl hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {deleting ? "Deleting..." : "Delete run"}
+                  </button>
+                </div>
+              ) : null}
+
+              <div className="mt-3 text-[12px] text-black/45">
+                Runs are stored locally on this device in this build.
+              </div>
             </div>
           </div>
         </div>
       ) : null}
-
-      <TabBar />
     </div>
   );
 }
