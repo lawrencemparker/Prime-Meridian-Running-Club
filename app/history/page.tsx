@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { TabBar } from "@/components/TabBar";
 
-import { Store, type Run, type Shoe } from "@/lib/mcrStore";
+import { Store, type Run, type Shoe, type Club } from "@/lib/mcrStore";
 
 function todayYYYYMMDD() {
   const d = new Date();
@@ -34,7 +34,6 @@ function round1(n: number) {
 }
 
 type Toast = { msg: string; kind?: "ok" | "err" };
-
 type EditMode = "add" | "edit";
 
 export default function HistoryPage() {
@@ -45,40 +44,8 @@ export default function HistoryPage() {
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
-  // list refresh nonce
   const [refreshNonce, setRefreshNonce] = useState(0);
 
-  // runs
-  const runs: Run[] = useMemo(() => {
-    if (!mounted) return [];
-    return Store.listRuns();
-  }, [mounted, refreshNonce]);
-
-  // shoes (for displaying + edit form)
-  const shoes: Shoe[] = useMemo(() => {
-    if (!mounted) return [];
-    return Store.listShoes();
-  }, [mounted, refreshNonce]);
-
-  const userName = useMemo(() => {
-    if (!mounted) return "Runner";
-    return Store.getMe()?.full_name ?? "Runner";
-  }, [mounted]);
-
-  const clubId = useMemo(() => {
-    if (!mounted) return null;
-    return Store.getActiveClubId() ?? Store.getMyApprovedClubId();
-  }, [mounted]);
-
-  const clubName = useMemo(() => {
-    if (!mounted || !clubId) return null;
-    return Store.getClubName(clubId);
-  }, [mounted, clubId]);
-
-  // filter state
-  const [fType, setFType] = useState<string>("all");
-
-  // modal state
   const [openModal, setOpenModal] = useState(false);
   const [mode, setMode] = useState<EditMode>("add");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -86,9 +53,16 @@ export default function HistoryPage() {
   // form fields
   const [fDate, setFDate] = useState(todayYYYYMMDD());
   const [fMiles, setFMiles] = useState("");
+  const [fType, setFType] = useState<string>("training");
   const [fRaceName, setFRaceName] = useState("");
   const [fNotes, setFNotes] = useState("");
   const [fShoeId, setFShoeId] = useState<string>("");
+
+  // NEW: club for add mode
+  const [fClubId, setFClubId] = useState<string>("");
+
+  // read-only club label for edit mode
+  const [editingClubName, setEditingClubName] = useState<string>("");
 
   const [showNotes, setShowNotes] = useState(false);
 
@@ -117,20 +91,52 @@ export default function HistoryPage() {
     toastTimerRef.current = window.setTimeout(() => setToast(null), 2400);
   }
 
+  const userName = useMemo(() => {
+    if (!mounted) return "Runner";
+    return Store.getMe()?.full_name ?? "Runner";
+  }, [mounted, refreshNonce]);
+
+  // Page-level club context (used for header + filtering)
+  const activeClubId = useMemo(() => {
+    if (!mounted) return null;
+    return Store.getActiveClubId() ?? Store.getMyApprovedClubId();
+  }, [mounted, refreshNonce]);
+
+  const activeClubName = useMemo(() => {
+    if (!mounted || !activeClubId) return null;
+    return Store.getClubName(activeClubId);
+  }, [mounted, activeClubId, refreshNonce]);
+
+  const clubs: Club[] = useMemo(() => {
+    if (!mounted) return [];
+    return typeof Store.listClubs === "function" ? Store.listClubs() : [];
+  }, [mounted, refreshNonce]);
+
+  const runs: Run[] = useMemo(() => {
+    if (!mounted) return [];
+    return Store.listRuns();
+  }, [mounted, refreshNonce]);
+
+  const shoes: Shoe[] = useMemo(() => {
+    if (!mounted) return [];
+    return Store.listShoes();
+  }, [mounted, refreshNonce]);
+
   const filteredRuns = useMemo(() => {
     const all = runs.slice();
-
-    // only show runs for selected/approved club if we have a clubId
-    const clubScoped = clubId ? all.filter((r) => String(r.club_id) === String(clubId)) : all;
-
-    if (fType === "all") return clubScoped;
-
-    return clubScoped.filter((r) => String(r.type ?? "") === fType);
-  }, [runs, fType, clubId]);
+    // keep page behavior: filter to active club when one exists
+    return activeClubId ? all.filter((r) => String(r.club_id) === String(activeClubId)) : all;
+  }, [runs, activeClubId]);
 
   const totalMiles = useMemo(() => {
     return round1(filteredRuns.reduce((sum, r) => sum + Number(r.miles ?? 0), 0));
   }, [filteredRuns]);
+
+  function defaultClubForNewRun(): string {
+    const preferred = String(Store.getActiveClubId?.() ?? Store.getMyApprovedClubId?.() ?? "");
+    if (preferred) return preferred;
+    return String(clubs[0]?.id ?? "");
+  }
 
   function resetForm() {
     setFDate(todayYYYYMMDD());
@@ -140,6 +146,10 @@ export default function HistoryPage() {
     setFNotes("");
     setFShoeId("");
     setShowNotes(false);
+
+    setFClubId(defaultClubForNewRun());
+
+    setEditingClubName("");
 
     setSaving(false);
     setDeleting(false);
@@ -168,6 +178,11 @@ export default function HistoryPage() {
 
     setFShoeId(String(r.shoe_id ?? ""));
 
+    // IMPORTANT: use the RUN's club_id, not the page's activeClubId
+    const runClubId = String(r.club_id ?? "");
+    const runClubName = runClubId ? Store.getClubName(runClubId) : null;
+    setEditingClubName(runClubName ?? "Unknown club");
+
     setSaving(false);
     setDeleting(false);
 
@@ -187,12 +202,6 @@ export default function HistoryPage() {
   async function onSave() {
     if (!mounted) return;
 
-    if (!clubId) {
-      showToast("Select a club first.", "err");
-      router.push("/clubs");
-      return;
-    }
-
     const milesNum = milesNumberOrNaN(fMiles);
     if (!Number.isFinite(milesNum) || milesNum <= 0) {
       showToast("Miles must be greater than 0.", "err");
@@ -207,7 +216,6 @@ export default function HistoryPage() {
 
     const type = String(fType ?? "training").trim() || "training";
 
-    // IMPORTANT: never pass null to fields typed as string | undefined
     const race_name = type === "race" ? (fRaceName.trim() || undefined) : undefined;
     const notes = showNotes ? (fNotes.trim() || undefined) : undefined;
     const shoe_id = fShoeId ? String(fShoeId) : undefined;
@@ -216,12 +224,18 @@ export default function HistoryPage() {
       setSaving(true);
 
       if (mode === "add") {
+        const clubIdToUse = String(fClubId || "").trim();
+        if (!clubIdToUse) {
+          showToast("Select a club first.", "err");
+          return;
+        }
+
         const me = Store.getMe();
         const userId = String(me?.id ?? "local-user");
 
         Store.addRun({
           user_id: userId,
-          club_id: String(clubId),
+          club_id: clubIdToUse,
           run_date: runDate,
           miles: milesNum,
           type,
@@ -242,6 +256,7 @@ export default function HistoryPage() {
         return;
       }
 
+      // do not modify club_id on edit
       Store.updateRun(editingId, {
         run_date: runDate,
         miles: milesNum,
@@ -285,7 +300,7 @@ export default function HistoryPage() {
         title="History"
         subtitle="Your logged runs"
         userName={userName}
-        clubName={clubName ?? undefined}
+        clubName={activeClubName ?? undefined}
         rightSlot={
           <Button className="h-9 px-4 rounded-full text-[13px] font-semibold" onClick={openAdd}>
             Add
@@ -310,38 +325,16 @@ export default function HistoryPage() {
         <Card className="p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                Summary
-              </div>
+              <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Summary</div>
               <div className="mt-1 text-[16px] font-semibold">Total: {totalMiles} mi</div>
-              <div className="mt-1 text-[13px] text-black/55">
-                Tap a run to edit.
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={fType}
-                onChange={(e) => setFType(e.target.value)}
-                className="h-9 rounded-xl border border-black/10 bg-white px-3 text-[13px] font-semibold outline-none"
-              >
-                <option value="all">All</option>
-                <option value="training">Training</option>
-                <option value="race">Race</option>
-                <option value="easy">Easy</option>
-                <option value="tempo">Tempo</option>
-                <option value="intervals">Intervals</option>
-                <option value="long">Long</option>
-              </select>
+              <div className="mt-1 text-[13px] text-black/55">Tap a run to edit.</div>
             </div>
           </div>
         </Card>
 
         {filteredRuns.length === 0 ? (
           <Card className="p-5">
-            <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-              No runs yet
-            </div>
+            <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">No runs yet</div>
             <div className="mt-2 text-[14px] text-black/60">
               Log a run to build your history and show progress over time.
             </div>
@@ -376,15 +369,11 @@ export default function HistoryPage() {
                       </div>
 
                       {r.race_name ? (
-                        <div className="mt-1 text-[13px] text-black/60">
-                          Race: {r.race_name}
-                        </div>
+                        <div className="mt-1 text-[13px] text-black/60">Race: {r.race_name}</div>
                       ) : null}
 
                       {r.notes ? (
-                        <div className="mt-2 text-[13px] text-black/55 line-clamp-2">
-                          {r.notes}
-                        </div>
+                        <div className="mt-2 text-[13px] text-black/55 line-clamp-2">{r.notes}</div>
                       ) : null}
                     </div>
 
@@ -408,7 +397,6 @@ export default function HistoryPage() {
 
       <TabBar />
 
-      {/* Add/Edit Modal */}
       {openModal ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center px-4 pb-6">
           <div className="absolute inset-0 bg-black/30" onClick={closeModal} />
@@ -423,12 +411,34 @@ export default function HistoryPage() {
                 {mode === "add" ? "Log miles" : "Update entry"}
               </div>
 
+              {/* CLUB */}
+              <div className="mt-3">
+                <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Club</div>
+
+                {mode === "add" ? (
+                  <select
+                    value={fClubId}
+                    onChange={(e) => setFClubId(e.target.value)}
+                    className="mt-2 w-full h-11 rounded-2xl border border-black/10 bg-white px-4 text-[14px] outline-none focus:border-black/25"
+                  >
+                    <option value="">Select a club</option>
+                    {clubs.map((c) => (
+                      <option key={String(c.id)} value={String(c.id)}>
+                        {String(c.name ?? "Club")}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="mt-2 w-full h-11 rounded-2xl border border-black/10 bg-black/[0.03] px-4 flex items-center text-[14px] text-black/75">
+                    {editingClubName || "Unknown club"}
+                  </div>
+                )}
+              </div>
+
               <div className="mt-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                      Date
-                    </div>
+                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Date</div>
                     <input
                       value={fDate}
                       onChange={(e) => setFDate(e.target.value)}
@@ -438,9 +448,7 @@ export default function HistoryPage() {
                   </div>
 
                   <div>
-                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                      Miles
-                    </div>
+                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Miles</div>
                     <input
                       value={fMiles}
                       onChange={(e) => setFMiles(e.target.value)}
@@ -452,9 +460,7 @@ export default function HistoryPage() {
                 </div>
 
                 <div>
-                  <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                    Type
-                  </div>
+                  <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Type</div>
                   <select
                     value={fType}
                     onChange={(e) => setFType(e.target.value)}
@@ -471,9 +477,7 @@ export default function HistoryPage() {
 
                 {String(fType) === "race" ? (
                   <div>
-                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                      Race name
-                    </div>
+                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Race name</div>
                     <input
                       value={fRaceName}
                       onChange={(e) => setFRaceName(e.target.value)}
@@ -485,9 +489,7 @@ export default function HistoryPage() {
 
                 <div>
                   <div className="flex items-center justify-between">
-                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                      Notes
-                    </div>
+                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Notes</div>
                     <button
                       type="button"
                       onClick={() => setShowNotes((v) => !v)}
@@ -509,9 +511,7 @@ export default function HistoryPage() {
                 </div>
 
                 <div>
-                  <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">
-                    Shoe (optional)
-                  </div>
+                  <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Shoe (optional)</div>
                   <select
                     value={fShoeId}
                     onChange={(e) => setFShoeId(e.target.value)}
@@ -550,9 +550,7 @@ export default function HistoryPage() {
                 </div>
               ) : null}
 
-              <div className="mt-3 text-[12px] text-black/45">
-                Runs are stored locally on this device in this build.
-              </div>
+              {/* REMOVED: "Runs are stored locally..." */}
             </div>
           </div>
         </div>
