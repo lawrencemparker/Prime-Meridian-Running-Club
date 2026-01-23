@@ -920,7 +920,11 @@ export const Store = {
   /* ---------- premium ---------- */
 
   isPremium(): boolean {
-    return readJSON<boolean>(K_PREMIUM, false);
+    // Requested for testing: disable premium gating so you can run the
+    // create-club flow repeatedly without being blocked by a paywall.
+    //
+    // Re-enable later by restoring the persisted flag (or real entitlements).
+    return true;
   },
 
   setPremiumActive(active: boolean) {

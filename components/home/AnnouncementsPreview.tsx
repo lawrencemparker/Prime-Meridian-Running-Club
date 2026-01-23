@@ -13,19 +13,21 @@ export type Announcement = {
 
 function formatLabel(created_at: string) {
   if (!created_at) return "";
-  if (created_at.toLowerCase().includes("today")) return "Today";
-  if (created_at.toLowerCase().includes("day")) return created_at.toUpperCase();
-  return created_at.toUpperCase();
+  const s = String(created_at);
+  if (s.toLowerCase().includes("today")) return "Today";
+  if (s.toLowerCase().includes("day")) return s.toUpperCase();
+  return s.toUpperCase();
 }
 
-export function AnnouncementsPreview({
-  clubName,
-  items,
-}: {
-  clubName: string;
-  items: Announcement[];
-}) {
-  const top = useMemo(() => items.slice(0, 2), [items]);
+type Props = {
+  clubName?: string | null;
+  items?: Announcement[] | null;
+};
+
+export function AnnouncementsPreview({ clubName, items }: Props) {
+  // Critical: items can be undefined/null during load or when the store returns undefined.
+  const safeItems = Array.isArray(items) ? items : [];
+  const top = useMemo(() => safeItems.slice(0, 2), [safeItems]);
 
   return (
     <Card className="p-5">
@@ -35,7 +37,7 @@ export function AnnouncementsPreview({
             Announcements
           </div>
           <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em] truncate">
-            {clubName}
+            {clubName ?? "Your club"}
           </div>
         </div>
 
@@ -56,7 +58,8 @@ export function AnnouncementsPreview({
               No announcements yet
             </div>
             <div className="mt-1 text-[13px] text-black/55">
-              Admins can post updates like meeting times, workouts, and schedule changes.
+              Admins can post updates like meeting times, workouts, and schedule
+              changes.
             </div>
           </div>
         ) : (
