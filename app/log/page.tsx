@@ -10,6 +10,66 @@ import { TabBar } from "@/components/TabBar";
 
 import { Store } from "@/lib/mcrStore";
 
+type ClubRow = { id: string; name: string; created_by?: string | null };
+
+async function loadClubsForDropdown() {
+  const supabase = supabaseBrowser();
+
+  const {
+    data: { user },
+    error: userErr,
+  } = await supabase.auth.getUser();
+
+  if (userErr) throw userErr;
+  if (!user) return [] as ClubRow[];
+
+  // 1) Clubs via memberships (normal path)
+  // NOTE: this assumes you have a foreign key from memberships.club_id -> clubs.id
+  const { data: viaMemberships, error: memErr } = await supabase
+    .from("memberships")
+    .select("club_id, clubs:club_id ( id, name, created_by )")
+    .eq("user_id", user.id);
+
+  // If RLS blocks memberships select, we still want to try owner fallback
+  const memClubs: ClubRow[] =
+    (viaMemberships ?? [])
+      .map((r: any) => r?.clubs)
+      .filter(Boolean)
+      .map((c: any) => ({
+        id: String(c.id),
+        name: String(c.name ?? ""),
+        created_by: c.created_by ?? null,
+      })) ?? [];
+
+  // 2) Fallback: clubs where user is the owner (critical for “membership missing”)
+  const { data: ownerClubs, error: ownerErr } = await supabase
+    .from("clubs")
+    .select("id,name,created_by")
+    .eq("created_by", user.id)
+    .order("created_at", { ascending: false });
+
+  // If memberships failed but owner works, we still proceed.
+  if (memErr && ownerErr) {
+    // both failed, surface the memberships error first (usually more informative)
+    throw memErr;
+  }
+
+  const owner: ClubRow[] =
+    (ownerClubs ?? []).map((c: any) => ({
+      id: String(c.id),
+      name: String(c.name ?? ""),
+      created_by: c.created_by ?? null,
+    })) ?? [];
+
+  // 3) Merge + dedupe (owner always included)
+  const merged = [...memClubs, ...owner];
+  const byId = new Map<string, ClubRow>();
+  for (const c of merged) byId.set(String(c.id), c);
+
+  return Array.from(byId.values());
+}
+
+
 const FLASH_TOAST_KEY = "mcr_flash_toast_v1";
 
 function setFlashToast(msg: string) {

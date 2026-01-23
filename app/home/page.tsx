@@ -1,4 +1,4 @@
-﻿// app/home/page.tsx
+﻿﻿// app/home/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -14,11 +14,67 @@ import { ShoeTrackerCard, Shoe } from "@/components/home/ShoeTrackerCard";
 import { AnnouncementsPreview, Announcement } from "@/components/home/AnnouncementsPreview";
 
 import { PostAuthProfileSync } from "@/components/auth/PostAuthProfileSync";
-import { supabaseBrowser } from "@/lib/supabase/client";
 import { Store, ACTIVE_CLUB_CHANGED_EVENT } from "@/lib/mcrStore";
+import { supabaseBrowser } from "@/lib/supabase/client";
 
-type ClubRow = { id: string; name: string; created_by: string; created_at: string };
-type MembershipRow = { club_id: string; user_id: string; is_admin: boolean; created_at: string };
+type ClubRow = { id: string; name: string; created_by?: string | null };
+
+async function loadClubsForDropdown() {
+  const supabase = supabaseBrowser();
+
+  const {
+    data: { user },
+    error: userErr,
+  } = await supabase.auth.getUser();
+
+  if (userErr) throw userErr;
+  if (!user) return [] as ClubRow[];
+
+  // 1) Clubs via memberships (normal path)
+  // NOTE: this assumes you have a foreign key from memberships.club_id -> clubs.id
+  const { data: viaMemberships, error: memErr } = await supabase
+    .from("memberships")
+    .select("club_id, clubs:club_id ( id, name, created_by )")
+    .eq("user_id", user.id);
+
+  // If RLS blocks memberships select, we still want to try owner fallback
+  const memClubs: ClubRow[] =
+    (viaMemberships ?? [])
+      .map((r: any) => r?.clubs)
+      .filter(Boolean)
+      .map((c: any) => ({
+        id: String(c.id),
+        name: String(c.name ?? ""),
+        created_by: c.created_by ?? null,
+      })) ?? [];
+
+  // 2) Fallback: clubs where user is the owner (critical for “membership missing”)
+  const { data: ownerClubs, error: ownerErr } = await supabase
+    .from("clubs")
+    .select("id,name,created_by")
+    .eq("created_by", user.id)
+    .order("created_at", { ascending: false });
+
+  // If memberships failed but owner works, we still proceed.
+  if (memErr && ownerErr) {
+    // both failed, surface the memberships error first (usually more informative)
+    throw memErr;
+  }
+
+  const owner: ClubRow[] =
+    (ownerClubs ?? []).map((c: any) => ({
+      id: String(c.id),
+      name: String(c.name ?? ""),
+      created_by: c.created_by ?? null,
+    })) ?? [];
+
+  // 3) Merge + dedupe (owner always included)
+  const merged = [...memClubs, ...owner];
+  const byId = new Map<string, ClubRow>();
+  for (const c of merged) byId.set(String(c.id), c);
+
+  return Array.from(byId.values());
+}
 
 
 const FLASH_TOAST_KEY = "mcr_flash_toast";
@@ -57,7 +113,6 @@ function firstNameFrom(fullName?: string | null) {
 
 export default function HomePage() {
   const router = useRouter();
-  const supabase = useMemo(() => supabaseBrowser(), []);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -88,16 +143,16 @@ export default function HomePage() {
     }
   }, [mounted]);
 
-  // Recompute on focus / active club change / after profile sync
+  // Force refresh when tab refocuses / active club changes
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     if (!mounted) return;
 
-    const bump = () => setRefreshNonce((n) => n + 1);
+    const sync = () => setRefreshNonce((n) => n + 1);
 
-    const onFocus = () => bump();
-    const onChanged = () => bump();
+    const onFocus = () => sync();
+    const onChanged = () => sync();
 
     window.addEventListener("focus", onFocus);
     window.addEventListener(ACTIVE_CLUB_CHANGED_EVENT, onChanged as any);
@@ -108,42 +163,7 @@ export default function HomePage() {
     };
   }, [mounted]);
 
-  // Sync Store.me from Supabase profiles on refresh so header name matches Profile
-  useEffect(() => {
-    if (!mounted) return;
-
-    (async () => {
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        const user = userData?.user;
-        if (!user) return;
-
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("id, full_name, phone")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        const full_name =
-          String(profile?.full_name ?? user.user_metadata?.full_name ?? user.user_metadata?.name ?? "").trim() ||
-          "Runner";
-
-        const phone = profile?.phone != null ? String(profile.phone).trim() : "";
-
-        Store.updateMe({
-          id: user.id,
-          full_name,
-          email: user.email ?? undefined,
-          phone: phone || undefined,
-        });
-
-        setRefreshNonce((n) => n + 1);
-      } catch {
-        // ignore
-      }
-    })();
-  }, [mounted, supabase]);
-
+  // Me (local store) — used for header name
   const me = useMemo(() => {
     if (!mounted) return null;
     try {
@@ -155,108 +175,123 @@ export default function HomePage() {
 
   const firstName = useMemo(() => firstNameFrom(me?.full_name), [me?.full_name]);
 
-  const [clubs, setClubs] = useState<ClubRow[]>([]);
-
-useEffect(() => {
-  if (!mounted) return;
-
-  (async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setClubs([]);
-        return;
-      }
-
-      // memberships for this user
-      const { data: mems, error: memErr } = await supabase
-        .from("memberships")
-        .select("club_id,user_id,is_admin,created_at")
-        .eq("user_id", user.id);
-
-      if (memErr) {
-        // If RLS blocks memberships, you’ll see empty clubs here.
-        setClubs([]);
-        return;
-      }
-
-      const memRows = (mems ?? []) as MembershipRow[];
-      const memberClubIds = Array.from(new Set(memRows.map((m) => m.club_id)));
-
-      const results: ClubRow[] = [];
-
-      // clubs by membership
-      if (memberClubIds.length > 0) {
-        const { data: clubsByMembership, error: c1Err } = await supabase
-          .from("clubs")
-          .select("id,name,created_by,created_at")
-          .in("id", memberClubIds);
-
-        if (!c1Err) results.push(...((clubsByMembership ?? []) as ClubRow[]));
-      }
-
-      // clubs by ownership
-      const { data: clubsByOwner, error: c2Err } = await supabase
-        .from("clubs")
-        .select("id,name,created_by,created_at")
-        .eq("created_by", user.id);
-
-      if (!c2Err) results.push(...((clubsByOwner ?? []) as ClubRow[]));
-
-      // de-dupe + sort
-      const dedup = Array.from(new Map(results.map((c) => [c.id, c])).values()).sort((a, b) =>
-        a.name.localeCompare(b.name)
-      );
-
-      setClubs(dedup);
-    } catch {
-      setClubs([]);
-    }
-  })();
-}, [mounted, supabase, refreshNonce]);
-
-
-  const [selectedClubId, setSelectedClubId] = useState<string>("");
-
+  /**
+   * Clubs (Supabase memberships -> clubs)
+   * This fixes: "Club exists on /clubs but not in /home dropdown"
+   */
+  const [clubs, setClubs] = useState<any[]>([]);
   useEffect(() => {
     if (!mounted) return;
 
-    let current: string = "";
-    try {
-      current = String((Store.getActiveClubId?.() ?? Store.getCurrentClubId?.() ?? "") || "");
-    } catch {
-      current = "";
+    let cancelled = false;
+
+    async function loadClubs() {
+      try {
+        const supabase = supabaseBrowser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) throw new Error("no-user");
+
+        const { data: mems, error: memErr } = await supabase
+          .from("memberships")
+          .select("club_id")
+          .eq("user_id", user.id);
+
+        if (memErr) throw memErr;
+
+        const clubIds = Array.from(new Set((mems ?? []).map((m: any) => String(m?.club_id ?? "")))).filter(Boolean);
+
+        if (!clubIds.length) {
+          if (!cancelled) setClubs([]);
+          return;
+        }
+
+        const { data: clubRows, error: clubErr } = await supabase
+          .from("clubs")
+          .select("id,name")
+          .in("id", clubIds);
+
+        if (clubErr) throw clubErr;
+
+        const opts = (clubRows ?? [])
+          .map((c: any) => ({ id: String(c?.id ?? ""), name: String(c?.name ?? "") }))
+          .filter((c: any) => c.id)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        if (!cancelled) setClubs(opts);
+      } catch {
+        // Fallback to local Store data (dev/seeded)
+        try {
+          const local = (Store as any).listClubs?.() ?? [];
+          const opts = (local ?? [])
+            .map((c: any) => ({ id: String(c?.id ?? ""), name: String(c?.name ?? "") }))
+            .filter((c: any) => c.id)
+            .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)));
+
+          if (!cancelled) setClubs(opts);
+        } catch {
+          if (!cancelled) setClubs([]);
+        }
+      }
     }
 
-    if (current && clubs.some((c: any) => String(c.id) === current)) {
-      setSelectedClubId(current);
+    void loadClubs();
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted, refreshNonce]);
+
+  // IMPORTANT: read/write ACTIVE club
+  const activeClubId = useMemo(() => {
+    if (!mounted) return "";
+    try {
+      if (typeof (Store as any).getActiveClubId === "function") return String((Store as any).getActiveClubId() || "");
+      return String((Store as any).activeClubId || "");
+    } catch {
+      return "";
+    }
+  }, [mounted, refreshNonce]);
+
+  const [selectedClubId, setSelectedClubId] = useState<string>("");
+
+  // Keep dropdown controlled value aligned with store active club
+  useEffect(() => {
+    if (!mounted) return;
+
+    if (activeClubId && clubs.some((c: any) => String(c.id) === String(activeClubId))) {
+      setSelectedClubId(String(activeClubId));
       return;
     }
 
-    if (!current && clubs.length > 0) {
-      const first = String(clubs[0].id);
-      setSelectedClubId(first);
+    if (selectedClubId && clubs.some((c: any) => String(c.id) === String(selectedClubId))) return;
+
+    const first = clubs[0]?.id ? String(clubs[0].id) : "";
+    setSelectedClubId(first);
+
+    if (first) {
       try {
         Store.setActiveClubId(first);
       } catch {
         // ignore
       }
-      return;
     }
-
-    setSelectedClubId("");
-  }, [mounted, clubs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted, clubs.length, activeClubId]);
 
   const clubName = useMemo(() => {
-  if (!mounted || !selectedClubId) return null;
-  const found = clubs.find((c) => String(c.id) === String(selectedClubId));
-  return found?.name ?? null;
-}, [mounted, selectedClubId, clubs]);
+    if (!mounted || !selectedClubId) return null;
+    try {
+      if (typeof Store.getClubName === "function") return Store.getClubName(selectedClubId);
+      const found = clubs.find((c) => String(c.id) === String(selectedClubId));
+      return found?.name ?? null;
+    } catch {
+      return null;
+    }
+  }, [mounted, selectedClubId, clubs]);
 
-
+  // Shoes
   const shoes: Shoe[] = useMemo(() => {
     if (!mounted) return [];
     try {
@@ -266,6 +301,7 @@ useEffect(() => {
     }
   }, [mounted, refreshNonce]);
 
+  // Announcements preview (club-scoped)
   const announcements: Announcement[] = useMemo(() => {
     if (!mounted || !selectedClubId) return [];
     if (typeof Store.listAnnouncements !== "function") return [];
@@ -285,6 +321,7 @@ useEffect(() => {
     }));
   }, [mounted, selectedClubId, refreshNonce]);
 
+  // Members
   const members = useMemo(() => {
     if (!mounted || !selectedClubId) return [] as any[];
     if (typeof Store.listMembers !== "function") return [] as any[];
@@ -295,6 +332,7 @@ useEffect(() => {
     }
   }, [mounted, selectedClubId, refreshNonce]);
 
+  // Admin flag
   const isAdmin = useMemo(() => {
     if (!mounted || !selectedClubId) return false;
     if (typeof Store.isAdmin !== "function") return false;
@@ -305,6 +343,7 @@ useEffect(() => {
     }
   }, [mounted, selectedClubId, refreshNonce]);
 
+  // Leaderboard preview (club-scoped; this month)
   const leaders = useMemo(() => {
     if (!mounted || !selectedClubId) return [] as { rank: number; full_name: string; total_miles: number }[];
 
@@ -333,111 +372,82 @@ useEffect(() => {
       else {
         const name =
           (typeof Store.getMemberName === "function" ? Store.getMemberName(selectedClubId, uid) : null) ??
-          (typeof Store.getUserName === "function" ? Store.getUserName(uid) : null) ??
           "Runner";
-
         totalsByUser.set(uid, { full_name: String(name), total: miles });
       }
     }
 
-    return Array.from(totalsByUser.values())
+    const rows = Array.from(totalsByUser.values())
       .sort((a, b) => b.total - a.total)
-      .slice(0, 5)
-      .map((x, idx) => ({ rank: idx + 1, full_name: x.full_name, total_miles: round1(x.total) }));
-  }, [mounted, selectedClubId, refreshNonce]);
+      .slice(0, 3)
+      .map((r, idx) => ({ rank: idx + 1, full_name: r.full_name, total_miles: round1(r.total) }));
 
-  function onSelectClub(nextId: string) {
-    setSelectedClubId(nextId);
-    try {
-      Store.setActiveClubId(nextId || null);
-    } catch {
-      // ignore
-    }
-    setRefreshNonce((n) => n + 1);
-  }
+    return rows;
+  }, [mounted, selectedClubId, refreshNonce]);
 
   return (
     <div className="pb-28">
-      <GradientHeader title={`Hello, ${firstName}`} subtitle="Let’s make progress today" />
       <PostAuthProfileSync />
+      <GradientHeader title={`Hello, ${firstName}`} subtitle="Let’s make progress today" />
 
-      <div className="px-5 mt-2">
+      <div className="px-5 mt-2 space-y-3">
         {flashToast ? (
-          <div className="mb-3 rounded-2xl border border-black/10 bg-white/70 px-4 py-3 text-[13px] text-black/70">
+          <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-[13px] text-emerald-800">
             {flashToast}
           </div>
         ) : null}
 
-        {/* Weather — full width to match other cards */}
-        <Card className="w-full p-4">
-          <div className="flex justify-center">
-            <WeatherPill />
-          </div>
-        </Card>
+        {/* Weather */}
+        <WeatherPill />
 
-        {/* Select Your Club — styled to match other cards */}
-        <Card className="mt-4 p-5">
-          <div className="flex items-start justify-between gap-3">
+        {/* Running Club selector */}
+        <Card className="p-5">
+          <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Running Club</div>
-
-              <div className="mt-1 text-[18px] font-semibold tracking-[-0.01em]">Select your club</div>
-
-              <div className="mt-1 text-[13px] text-black/55">
+              <div className="mt-1 text-[22px] font-semibold tracking-[-0.02em]">Select your club</div>
+              <p className="mt-2 text-[15px] text-black/55 leading-relaxed">
                 Announcements, members, and leaderboard update based on your selection.
-              </div>
+              </p>
             </div>
 
             <div className="shrink-0">
-              <div className="h-12 w-12 rounded-2xl bg-white/70 border border-black/5 shadow-sm flex items-center justify-center text-[20px]">
-                {"\u{1F3C1}"}
+              <div className="h-14 w-14 rounded-3xl bg-white/70 border border-black/5 shadow-[0_16px_40px_rgba(15,23,42,0.10)] flex items-center justify-center">
+                <span className="text-[22px]">🏁</span>
               </div>
             </div>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-5">
             <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Club</div>
 
-            <div className="relative mt-2">
-              <select
-                value={selectedClubId}
-                onChange={(e) => onSelectClub(e.target.value)}
-                className={[
-                  "w-full h-11 rounded-2xl",
-                  "border border-black/10 bg-white/70",
-                  "px-4 pr-12",
-                  "text-[14px] text-black/80",
-                  "outline-none appearance-none",
-                ].join(" ")}
-              >
-                <option value="">No club selected</option>
-                {clubs.map((c: any) => (
-                  <option key={String(c.id)} value={String(c.id)}>
-                    {String(c.name)}
-                  </option>
-                ))}
-              </select>
+            <select
+              value={selectedClubId || ""}
+              onChange={(e) => {
+                const v = String(e.target.value || "");
+                setSelectedClubId(v);
 
-              <div className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-black/55">
-                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    d="M7 10l5 5 5-5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-            </div>
+                try {
+                  Store.setActiveClubId(v || null);
+                } catch {
+                  // ignore
+                }
+              }}
+              className="mt-2 w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 text-[16px] outline-none"
+            >
+              <option value="">{clubs.length ? "No club selected" : "No clubs yet"}</option>
+              {clubs.map((c: any) => (
+                <option key={String(c.id)} value={String(c.id)}>
+                  {String(c.name)}
+                </option>
+              ))}
+            </select>
 
-            <div className="mt-3 flex items-center justify-between">
-              <div className="text-[12px] text-black/45">You can still browse/join clubs on the Clubs page.</div>
-
+            <div className="mt-4 flex items-center justify-between text-[14px] text-black/45">
+              <div>You can still browse/join clubs on the Clubs page.</div>
               <button
+                className="text-black/55 hover:text-black/70 active:text-black/80 transition"
                 onClick={() => router.push("/clubs")}
-                className="text-[12px] text-black/55 no-underline hover:text-black/70"
               >
                 Open Clubs
               </button>
@@ -446,78 +456,56 @@ useEffect(() => {
         </Card>
 
         {/* Shoe Mileage */}
-        <div className="mt-4">
-          <ShoeTrackerCard
-            shoes={shoes}
-            onManageShoes={() => router.push("/shoes")}
-            onAddShoes={() => router.push("/shoes/new")}
-          />
-        </div>
+        <ShoeTrackerCard
+          shoes={shoes}
+          onManageShoes={() => router.push("/shoes")}
+          onAddShoes={() => router.push("/shoes")}
+        />
 
-        {/* Club modules */}
-        {selectedClubId && clubName ? (
+        {/* Announcements */}
+        <AnnouncementsPreview
+          clubName={clubName || ""}
+          clubId={selectedClubId || ""}
+          isAdmin={isAdmin}
+          announcements={announcements}
+          onView={() => router.push("/clubs/announcements")}
+        />
+
+        {/* Members */}
+        <Card className="p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Members</div>
+              <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em]">
+                {clubName ? `${clubName} Directory` : "Club Directory"}
+              </div>
+              <div className="mt-1 text-[13px] text-black/55">
+                {selectedClubId ? `${members.length} members` : "Select a club to view members."}
+              </div>
+            </div>
+
+            <Button
+              variant="secondary"
+              onClick={() => router.push("/clubs/members")}
+              disabled={!selectedClubId}
+            >
+              See all
+            </Button>
+          </div>
+
+          <div className="mt-4 text-[12px] text-black/45">
+            Members can view the directory. Only admins can invite or remove members.
+          </div>
+        </Card>
+
+        {/* Leaderboard preview / Create club */}
+        {selectedClubId ? (
           <>
             <div className="mt-4">
-              <AnnouncementsPreview clubName={clubName} items={announcements ?? []} />
-            </div>
-
-            <div className="mt-4">
               <Card className="p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Members</div>
-                    <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em] truncate">
-                      {clubName} Directory
-                    </div>
-                    <div className="mt-1 text-[13px] text-black/55">
-                      {members.length} {members.length === 1 ? "member" : "members"}
-                    </div>
-                  </div>
-
-                  <div className="shrink-0">
-                    <Button variant="secondary" onClick={() => router.push("/clubs/members")}>
-                      See all
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-2">
-                  {members.slice(0, 3).map((m: any) => (
-                    <div
-                      key={String(m.id)}
-                      className="flex items-center justify-between rounded-2xl border border-black/5 bg-white/55 px-4 py-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="font-semibold truncate">{m.full_name}</div>
-                        <div className="mt-1 text-[12px] text-black/55 truncate">
-                          {(m.phone ? String(m.phone) : "") || (m.email ? String(m.email) : "") || ""}
-                        </div>
-                      </div>
-                      {isAdmin ? <div className="text-[12px] text-black/45">Admin</div> : null}
-                    </div>
-                  ))}
-                  {members.length === 0 ? <div className="text-[13px] text-black/55">No members yet.</div> : null}
-                </div>
-              </Card>
-            </div>
-
-            <div className="mt-4">
-              <Card className="p-5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Leaderboard</div>
-                    <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em] truncate">
-                      {clubName} Leaderboard
-                    </div>
-                    <div className="mt-1 text-[13px] text-black/55">This month</div>
-                  </div>
-
-                  <div className="shrink-0">
-                    <Button variant="secondary" onClick={() => router.push("/leaderboard")}>
-                      See all
-                    </Button>
-                  </div>
-                </div>
+                <div className="text-[12px] text-black/45 tracking-[0.18em] uppercase">Leaderboard</div>
+                <div className="mt-1 text-[16px] font-semibold tracking-[-0.01em]">Top miles this month</div>
+                <p className="mt-1 text-[13px] text-black/55">Miles (club only)</p>
 
                 <div className="mt-4 space-y-2">
                   {leaders.length === 0 ? (
@@ -555,6 +543,12 @@ useEffect(() => {
                     })
                   )}
                 </div>
+
+                <div className="mt-4">
+                  <Button variant="secondary" onClick={() => router.push("/leaderboard")}>
+                    View
+                  </Button>
+                </div>
               </Card>
             </div>
           </>
@@ -567,7 +561,23 @@ useEffect(() => {
                 Create a club to invite runners, post announcements, and track miles on a monthly leaderboard.
               </p>
               <div className="mt-4">
-                <Button variant="secondary" onClick={() => router.push("/clubs/create")}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    // Premium gating: route non-premium users to the Premium screen first.
+                    const premiumOn =
+                      (Store as any)?.isPremium?.() ??
+                      (Store as any)?.isPremiumActive?.() ??
+                      false;
+
+                    if (!premiumOn) {
+                      router.push("/premium?next=%2Fclubs%2Fcreate");
+                      return;
+                    }
+
+                    router.push("/clubs/create");
+                  }}
+                >
                   Create a club
                 </Button>
               </div>
