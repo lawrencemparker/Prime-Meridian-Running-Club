@@ -1,146 +1,92 @@
+// app/premium/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
-/**
- * Platform detection
- * Web = Stripe
- * iOS = Apple IAP
- * Android = Google Play Billing
- */
-function detectPlatform(): "web" | "ios" | "android" {
-  if (typeof navigator === "undefined") return "web";
-
-  const ua = navigator.userAgent || "";
-
-  if (/iPhone|iPad|iPod/i.test(ua)) return "ios";
-  if (/Android/i.test(ua)) return "android";
-
-  return "web";
-}
-
 export default function PremiumPage() {
+  const sp = useSearchParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
-  const nextPath = searchParams.get("next") || "/clubs/create";
+  const nextPath = useMemo(() => sp.get("next") || "/home", [sp]);
+  const canceled = sp.get("canceled") === "1";
 
-  const [loading, setLoading] = useState(true);
-  const [isPremium, setIsPremium] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const platform = useMemo(() => detectPlatform(), []);
+  async function startStripeCheckout() {
+    setErr(null);
+    setLoading(true);
 
-  useEffect(() => {
-    async function loadProfile() {
+    try {
       const supabase = supabaseBrowser();
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data } = await supabase.auth.getUser();
+      const user = data?.user;
 
       if (!user) {
-        router.replace("/login");
+        router.push(`/login?next=${encodeURIComponent("/premium?next=" + nextPath)}`);
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_premium")
-        .eq("id", user.id)
-        .single();
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          next: nextPath,
+          userId: user.id,
+          email: user.email,
+        }),
+      });
 
-      if (profile?.is_premium) {
-        // Already premium → go straight to destination
-        router.replace(nextPath);
-        return;
-      }
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error || "Checkout failed");
 
-      setIsPremium(false);
+      if (!json?.url) throw new Error("Missing Stripe Checkout URL");
+
+      window.location.assign(json.url);
+    } catch (e: any) {
+      setErr(e?.message || "Failed to start checkout");
       setLoading(false);
-    }
-
-    loadProfile();
-  }, [router, nextPath]);
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[70vh] items-center justify-center">
-        <div className="text-[14px] text-black/60">Loading…</div>
-      </div>
-    );
-  }
-
-  /**
-   * CTA handlers
-   * (Billing implementation comes later)
-   */
-  function handleUpgrade() {
-    if (platform === "web") {
-      // Placeholder for Stripe Checkout
-      alert("Stripe Checkout will be triggered here.");
-      return;
-    }
-
-    if (platform === "ios") {
-      alert("Apple In-App Purchase flow will start here.");
-      return;
-    }
-
-    if (platform === "android") {
-      alert("Google Play Billing flow will start here.");
-      return;
     }
   }
 
   return (
-    <div className="mx-auto max-w-[420px] px-4 pt-10 pb-16">
-      <Card className="p-6">
-        <div className="text-center">
-          <div className="text-[18px] font-semibold text-black">
-            Upgrade to Premium
+    <div className="mx-auto max-w-[420px] px-4 py-8">
+      <Card className="p-5">
+        <div className="text-[18px] font-semibold">Premium</div>
+        <div className="mt-1 text-[13px] text-black/55">
+          Unlock clubs, invites, and club leaderboards with a 7-day free trial.
+        </div>
+
+        {canceled ? (
+          <div className="mt-4 text-[13px] text-black/60">
+            Checkout canceled. You can try again anytime.
           </div>
+        ) : null}
 
-          <div className="mt-2 text-[14px] text-black/60">
-            Unlock club creation and management.
-          </div>
+        <div className="mt-5 space-y-2 text-[13px] text-black/70">
+          <div>• Create private clubs</div>
+          <div>• Invite members by email</div>
+          <div>• Club leaderboard (monthly reset)</div>
+          <div>• Multiple admins</div>
         </div>
 
-        {/* Benefits */}
-        <div className="mt-6 space-y-3 text-[14px] text-black/80">
-          <div>• Create and manage private running clubs</div>
-          <div>• Invite members to your club</div>
-          <div>• Access club leaderboards</div>
-          <div>• Manage members and announcements</div>
-        </div>
+        {err ? <div className="mt-4 text-[13px] text-red-600">{err}</div> : null}
 
-        {/* Trial Messaging */}
-        <div className="mt-6 rounded-lg bg-black/[0.03] p-3 text-center text-[13px] text-black/70">
-          7-day free trial · $9.99/month after  
-          <br />
-          Cancel anytime
-        </div>
-
-        {/* CTA */}
         <div className="mt-6">
-          <Button className="w-full" onClick={handleUpgrade}>
-            {platform === "web" && "Start 7-day free trial"}
-            {platform === "ios" && "Start free trial (App Store)"}
-            {platform === "android" && "Start free trial (Google Play)"}
+          <Button onClick={startStripeCheckout} disabled={loading}>
+            {loading ? "Starting..." : "Start 7-day trial — $9.99/month"}
           </Button>
-        </div>
 
-        {/* Secondary action */}
-        <div className="mt-4 text-center">
           <button
-            className="text-[13px] text-black/50 underline"
-            onClick={() => router.back()}
+            className="mt-3 w-full text-center text-[12px] text-black/55 underline underline-offset-4"
+            onClick={() => router.push(nextPath)}
+            type="button"
           >
-            Maybe later
+            Not now
           </button>
         </div>
       </Card>
