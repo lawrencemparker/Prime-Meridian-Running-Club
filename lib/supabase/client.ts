@@ -1,16 +1,33 @@
-// lib/supabase/client.ts
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+let _browserClient: SupabaseClient | null = null;
 
 /**
- * Browser Supabase client.
- * Uses direct NEXT_PUBLIC_* access so Next can inline env values into the client bundle.
+ * Client-side Supabase instance.
+ *
+ * Notes:
+ * - Uses NEXT_PUBLIC_* env vars.
+ * - Singleton to avoid re-creating the client on every render.
  */
-export function supabaseBrowser() {
+export function supabaseBrowser(): SupabaseClient {
+  if (_browserClient) return _browserClient;
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url) throw new Error("Missing environment variable: NEXT_PUBLIC_SUPABASE_URL");
-  if (!anon) throw new Error("Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  if (!url || !anonKey) {
+    throw new Error(
+      "Missing Supabase env vars. Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set in .env.local"
+    );
+  }
 
-  return createBrowserClient(url, anon);
+  _browserClient = createClient(url, anonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
+
+  return _browserClient;
 }
