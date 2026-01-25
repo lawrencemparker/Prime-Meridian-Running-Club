@@ -1,81 +1,38 @@
-// components/GradientHeader.tsx
 "use client";
 
-import React from "react";
+import { ReactNode } from "react";
 
 type Props = {
-  title: string;
+  title?: string;
   subtitle?: string;
-
-  /**
-   * Optional – used in some screens to display context (e.g., active club).
-   */
-  clubName?: string;
-
-  /**
-   * Optional – allows pages to inject buttons/actions (e.g., “New”, “Edit”).
-   */
-  rightSlot?: React.ReactNode;
-
-  /**
-   * Optional – older pages may not pass this.
-   * If you want it displayed, pass Store.getMe()?.full_name from the page.
-   */
-  userName?: string;
+  right?: ReactNode;
 };
 
-export function GradientHeader({
-  title,
-  subtitle,
-  clubName,
-  rightSlot,
-  userName,
-}: Props) {
+export function GradientHeader({ title, subtitle, right }: Props) {
+  const safeTitleLength = Math.max(0, (title ?? "").length - 1);
+  const safeSubtitleLength = Math.max(0, (subtitle ?? "").length - 1);
+
   return (
-    <div className="relative">
-      {/* Soft background (no harsh black) */}
-      <div className="h-28 w-full bg-gradient-to-b from-sky-100 via-white to-white" />
+    <div className="relative mb-6 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 p-6 text-white shadow-lg">
+      {right ? <div className="absolute right-4 top-4">{right}</div> : null}
 
-      {/* Subtle decorative glow */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-28">
-        <div className="mx-auto max-w-md px-5 h-full relative">
-          <div className="absolute -top-10 right-6 h-32 w-32 rounded-full bg-blue-400/15 blur-2xl" />
-          <div className="absolute -top-8 left-8 h-24 w-24 rounded-full bg-sky-300/20 blur-2xl" />
-        </div>
-      </div>
-
-      {/* Content card */}
-      <div className="mx-auto -mt-16 max-w-md px-5">
-        <div className="rounded-2xl border border-black/10 bg-white/80 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.10)] backdrop-blur">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[20px] font-semibold tracking-[-0.01em] leading-tight text-black">
-                {title}
-              </div>
-
-              {!!subtitle && (
-                <div className="mt-1 text-[13px] text-black/60">{subtitle}</div>
-              )}
-
-              {(clubName || userName) && (
-                <div className="mt-2 text-[12px] text-black/55">
-                  {userName ? (
-                    <span className="font-semibold text-black/70">
-                      {userName}
-                    </span>
-                  ) : null}
-                  {userName && clubName ? (
-                    <span className="mx-2 text-black/35">•</span>
-                  ) : null}
-                  {clubName ? <span>{clubName}</span> : null}
-                </div>
-              )}
-            </div>
-
-            {rightSlot ? <div className="shrink-0">{rightSlot}</div> : null}
+      {title ? (
+        <div className="text-xl font-semibold leading-tight">
+          {title}
+          <div className="mt-1 text-white/60">
+            {"—".repeat(safeTitleLength)}
           </div>
         </div>
-      </div>
+      ) : null}
+
+      {subtitle ? (
+        <div className="mt-2 text-sm text-white/80">
+          {subtitle}
+          <div className="mt-1 text-white/40">
+            {"—".repeat(safeSubtitleLength)}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
